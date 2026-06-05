@@ -1,0 +1,14 @@
+# ===== Generated output files =====
+*.xls
+*.xlsx
+
+# ===== Raw data (may contain sensitive sales/customer info) =====
+# These are ignored by default so real sales data is NOT uploaded.
+# If you DO want to track sample data, delete the line below.
+*.csv
+
+# ===== OS / editor junk =====
+Thumbs.db
+desktop.ini
+.DS_Store
+*.tmp

@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="EUC-KR">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>���� �м� ���α׷�</title>
+<style>
+  :root{
+    --blue:#2f57c4; --blue-d:#23459c; --bg:#f4f6fb; --line:#e2e6ef;
+    --txt:#1f2733; --muted:#6b7585; --ok:#1a7f4b;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:"���� ����","Malgun Gothic",system-ui,sans-serif;
+       background:var(--bg);color:var(--txt);}
+  header{background:linear-gradient(135deg,var(--blue),var(--blue-d));color:#fff;
+         padding:22px 28px;}
+  header h1{margin:0;font-size:22px;}
+  header p{margin:6px 0 0;opacity:.9;font-size:13px;}
+  main{max-width:1080px;margin:0 auto;padding:22px;}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;
+        padding:20px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+  .card h2{margin:0 0 4px;font-size:16px;}
+  .card .desc{color:var(--muted);font-size:12px;margin:0 0 12px;}
+  .file-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0;}
+  .file-row label{flex:0 0 210px;font-weight:bold;font-size:14px;}
+  .file-row .sub{color:var(--muted);font-weight:normal;font-size:12px;display:block;}
+  .hidden-input{display:none;}
+  .fname{flex:1;min-width:180px;color:var(--muted);font-size:13px;
+         border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:#fafbfe;
+         overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .fname.loaded{color:var(--ok);font-weight:bold;background:#f1faf4;border-color:#bfe6cf;}
+  .clear,.reset{border:1px solid var(--line);background:#fff;color:#c0392b;cursor:pointer;
+         font-size:13px;padding:6px 10px;border-radius:6px;}
+  .clear:hover,.reset:hover{background:#fbeaea;}
+  .btn{background:var(--blue);color:#fff;border:0;border-radius:8px;
+       padding:12px 20px;font-size:15px;font-weight:bold;cursor:pointer;}
+  .btn:hover{background:var(--blue-d);}
+  .btn.secondary{background:#fff;color:var(--blue);border:1px solid var(--blue);}
+  .btn.load{padding:9px 16px;font-size:13px;white-space:nowrap;}
+  .btn:disabled{background:#aab;cursor:not-allowed;}
+  .actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:14px;
+           border-top:1px solid var(--line);padding-top:16px;}
+  .status{margin-top:12px;font-size:13px;color:var(--muted);white-space:pre-wrap;
+          font-family:Consolas,monospace;background:#fafbfe;border:1px solid var(--line);
+          border-radius:8px;padding:10px;max-height:160px;overflow:auto;display:none;}
+  .summary{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:18px;}
+  .kpi{flex:1;min-width:170px;background:#fff;border:1px solid var(--line);
+       border-radius:12px;padding:16px;}
+  .kpi .k{font-size:12px;color:var(--muted);}
+  .kpi .v{font-size:22px;font-weight:bold;margin-top:4px;}
+  table{border-collapse:collapse;width:100%;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;}
+  th{background:#eef1f9;position:sticky;top:0;}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;}
+  tr.total td{font-weight:bold;background:#fff7e6;}
+  tr:nth-child(even):not(.total) td{background:#fbfcfe;}
+  .tablewrap{overflow:auto;max-height:460px;border-radius:8px;}
+  .tabbtns{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;}
+  .tabbtns button{padding:8px 14px;border:1px solid var(--line);background:#fff;
+                  border-radius:20px;cursor:pointer;font-size:13px;}
+  .tabbtns button.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+  .hide{display:none;}
+  .hint{color:var(--muted);font-size:12px;margin-top:10px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>���� �м� ���α׷�</h1>
+  <p>ERP ���� �Ǹ���Ȳ CSV �� �ŷ�ó �з��� / ǰ�� �з��� / ���� ǰ�� ����,�������� �ڵ� ����</p>
+</header>
+
+<main>
+  <div class="card">
+    <h2>1. ������ ���� �ҷ�����</h2>
+    <p class="desc">�Ŵ� ERP���� ���� �Ǹ���Ȳ ������ �ְ� �м��� �����ϼ���.</p>
+    <div class="file-row">
+      <label>(1) ǰ�� �Ǹ���Ȳ <span class="sub">�ʼ� / ǰ���ڵ� ����</span></label>
+      <button class="btn load" type="button" data-target="itemFile">�ҷ�����</button>
+      <span class="fname" id="name_itemFile">���õ� ���� ����</span>
+      <button class="clear" type="button" data-target="itemFile" title="�����">�����</button>
+      <input type="file" id="itemFile" accept=".csv" class="hidden-input">
+    </div>
+    <div class="file-row">
+      <label>(2) �ŷ�ó�� �Ǹ���Ȳ <span class="sub">�ʼ� / �ŷ�ó�ڵ� ����</span></label>
+      <button class="btn load" type="button" data-target="custFile">�ҷ�����</button>
+      <span class="fname" id="name_custFile">���õ� ���� ����</span>
+      <button class="clear" type="button" data-target="custFile" title="�����">�����</button>
+      <input type="file" id="custFile" accept=".csv" class="hidden-input">
+    </div>
+
+    <div class="actions">
+      <button class="btn" id="runBtn">�м� ����</button>
+      <button class="btn secondary" id="xlsBtn" disabled>���� �ٿ�ε�(���� ��Ʈ)</button>
+    </div>
+    <div class="hint">���� ���� = (1) ǰ���ڵ忡 '����' ���� �� (2) ǰ����� �ູ / ������� / ���׸��� / �Ͼ��� �� �ϳ� ����</div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="card">
+    <h2>�з�ǥ (�⺻ �����ͺ��̽�)</h2>
+    <p class="desc">�з� ������ ���α׷��� �̹� ����Ǿ� �־� <b>���� �ø��� �ʾƵ� �˴ϴ�.</b>
+       ������ �ٲٰ� ���� ���� ���� 1ȸ ����ϸ�, �� �������� ����Ǿ� �������� �ڵ����� ���Դϴ�.</p>
+    <div class="file-row">
+      <label>ǰ��з� ��Īǥ <span class="sub">���� / ���� 1ȸ</span></label>
+      <button class="btn load secondary" type="button" data-target="itemMapFile">���(�ҷ�����)</button>
+      <span class="fname" id="status_itemMap">�⺻ ���尪 ��� ��</span>
+      <button class="reset" type="button" id="resetItemMap" title="�⺻������ �ǵ�����">�ʱ�ȭ</button>
+      <input type="file" id="itemMapFile" accept=".csv" class="hidden-input">
+    </div>
+    <div class="file-row">
+      <label>�ŷ�ó�з� ��Īǥ <span class="sub">���� / ���� 1ȸ</span></label>
+      <button class="btn load secondary" type="button" data-target="custMapFile">���(�ҷ�����)</button>
+      <span class="fname" id="status_custMap">�⺻ ���尪 ��� ��</span>
+      <button class="reset" type="button" id="resetCustMap" title="�⺻������ �ǵ�����">�ʱ�ȭ</button>
+      <input type="file" id="custMapFile" accept=".csv" class="hidden-input">
+    </div>
+  </div>
+
+  <div id="results" class="hide">
+    <div class="summary" id="kpis"></div>
+    <div class="card">
+      <div class="tabbtns" id="tabbtns"></div>
+      <div id="tables"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+"use strict";
+
+/* ===== �⺻ �з�ǥ (���� �����ͺ��̽�) ===== */
+const DEFAULT_ITEM_MAP = {
+  a:"�������", b:"ȭ����, ��Ƽ��", c:"�尩 �Ǻ�", d:"����", e:"�繫��ǰ",
+  f:"�μ����˹�", g:"����", h:"��ǰ", i:"������", j:"������", k:"�뿪����",
+  l:"����ũ", m:"��Ʈ�Ϻ�����", n:"���̹ڽ�", o:"����������", p:"����",
+  q:"LED��", r:"������", s:"�����ε�", t:"���ݼ�����ħ", u:"������", z:"����������"
+};
+const DEFAULT_CUST_MAP = {
+  z:"��Ÿ", e:"��Ÿ���", d:"�������", c:"�������", b:"�������", a:"������ġ��ü"
+};
+const BRANDS = ["�ູ","�������","���׸���","�Ͼ���"];
+const LS_ITEM = "salesAnalyzer_itemMap";
+const LS_CUST = "salesAnalyzer_custMap";
+
+let resultTables = null;
+let currentItemMap = Object.assign({}, DEFAULT_ITEM_MAP);
+let currentCustMap = Object.assign({}, DEFAULT_CUST_MAP);
+
+const $ = id => document.getElementById(id);
+
+function logStatus(msg){
+  const s = $("status");
+  s.style.display = "block";
+  s.textContent += msg + "\n";
+  s.scrollTop = s.scrollHeight;
+}
+function clearStatus(){ $("status").textContent=""; $("status").style.display="none"; }
+
+function num(v){
+  if(v==null) return 0;
+  const s = String(v).replace(/[",\s]/g,"");
+  if(s==="" || s==="-") return 0;
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+function firstLetter(code){
+  const s = String(code).trim();
+  return s ? s.charAt(0).toLowerCase() : "";
+}
+function findBrand(name){
+  const t = String(name);
+  for(const b of BRANDS){ if(t.includes(b)) return b; }
+  return "";
+}
+function fmt(n){ return Math.round(n).toLocaleString("ko-KR"); }
+
+/* ���ε� ���� ���ڵ� �ڵ� �Ǻ�(UTF-8 �켱, ���� �� EUC-KR/CP949) */
+function readFileSmart(file){
+  return file.arrayBuffer().then(buf=>{
+    const bytes = new Uint8Array(buf);
+    try{
+      return new TextDecoder("utf-8",{fatal:true}).decode(bytes);
+    }catch(e){
+      try{ return new TextDecoder("euc-kr").decode(bytes); }
+      catch(e2){ return new TextDecoder("utf-8").decode(bytes); }
+    }
+  });
+}
+
+function parseCSV(text){
+  const rows=[]; let row=[], field="", i=0, inQ=false;
+  while(i<text.length){
+    const c=text[i];
+    if(inQ){
+      if(c==='"'){
+        if(text[i+1]==='"'){ field+='"'; i+=2; continue; }
+        inQ=false; i++; continue;
+      }
+      field+=c; i++; continue;
+    }
+    if(c==='"'){ inQ=true; i++; continue; }
+    if(c===','){ row.push(field); field=""; i++; continue; }
+    if(c==='\r'){ i++; continue; }
+    if(c==='\n'){ row.push(field); rows.push(row); row=[]; field=""; i++; continue; }
+    field+=c; i++;
+  }
+  if(field!=="" || row.length>0){ row.push(field); rows.push(row); }
+  return rows;
+}
+
+function colIndex(headers, exacts, contains){
+  for(const n of exacts){
+    const idx = headers.indexOf(n);
+    if(idx>=0) return idx;
+  }
+  if(contains){
+    for(let i=0;i<headers.length;i++){
+      for(const c of contains){ if(headers[i].includes(c)) return i; }
+    }
+  }
+  return -1;
+}
+function findHeaderRow(rows, keyCols){
+  for(let i=0;i<Math.min(rows.length,6);i++){
+    const r = rows[i].map(x=>String(x).trim());
+    for(const k of keyCols){ if(r.includes(k)) return i; }
+  }
+  return 0;
+}
+
+function buildMap(rows, fallback){
+  if(!rows || rows.length<2) return Object.assign({},fallback);
+  const m = {};
+  for(let i=1;i<rows.length;i++){
+    const r = rows[i];
+    if(!r || r.length<2) continue;
+    const k = String(r[0]).trim().toLowerCase();
+    const v = String(r[1]).trim();
+    if(k) m[k]=v;
+  }
+  return Object.keys(m).length ? m : Object.assign({},fallback);
+}
+
+function aggregate(records){
+  const map = new Map();
+  for(const r of records){
+    let o = map.get(r.key);
+    if(!o){ o={key:r.key, �����:0, ����:0, �Ǽ�:0}; map.set(r.key,o); }
+    o.����� += r.amount; o.���� += r.qty; o.�Ǽ� += 1;
+  }
+  return [...map.values()];
+}
+
+function makeTable(name, columns, numeric, dataRows, addTotal){
+  const rows = dataRows.map(r=>r.slice());
+  if(addTotal){
+    const total = columns.map(c => numeric.includes(c) ? 0 : "");
+    total[0] = "���հ�";
+    for(let ci=0; ci<columns.length; ci++){
+      if(numeric.includes(columns[ci])){
+        let s=0; for(const r of rows){ s += (typeof r[ci]==="number"? r[ci]:0); }
+        total[ci]=s;
+      }
+    }
+    rows.push(total);
+  }
+  return {name, columns, numeric, rows};
+}
+
+async function runAnalysis(){
+  clearStatus();
+  const itemFile = $("itemFile").files[0];
+  const custFile = $("custFile").files[0];
+  if(!itemFile){ alert("(1) ǰ�� �Ǹ���Ȳ ������ �ҷ�������."); return; }
+  if(!custFile){ alert("(2) �ŷ�ó�� �Ǹ���Ȳ ������ �ҷ�������."); return; }
+
+  $("runBtn").disabled = true;
+  try{
+    logStatus("�м��� �����մϴ�...");
+    const itemMap = currentItemMap;
+    const custMap = currentCustMap;
+
+    /* ---- �ŷ�ó�� ---- */
+    logStatus("- �ŷ�ó�� �Ǹ���Ȳ �д� ��...");
+    const cRows = parseCSV(await readFileSmart(custFile));
+    const cH = findHeaderRow(cRows, ["�ŷ�ó�ڵ�"]);
+    const cHead = cRows[cH].map(x=>String(x).trim());
+    const cCode = colIndex(cHead, ["�ŷ�ó�ڵ�"]);
+    const cQty  = colIndex(cHead, ["����"]);
+    const cAmt  = colIndex(cHead, ["���ް���"], null);
+    const cSum  = colIndex(cHead, ["�հ�"]);
+    const cAmtCol = cAmt>=0 ? cAmt : cSum;
+    if(cCode<0) throw new Error("�ŷ�ó�� ���Ͽ��� '�ŷ�ó�ڵ�' �÷��� ã�� ���߽��ϴ�.");
+
+    const custRecords = [];
+    for(let i=cH+1;i<cRows.length;i++){
+      const r = cRows[i];
+      if(!r || cCode>=r.length) continue;
+      const code = String(r[cCode]||"").trim();
+      if(!code) continue;
+      const k = firstLetter(code);
+      custRecords.push({
+        key: custMap[k] || (k? "�̺з�("+k+")":"�̺з�"),
+        amount: num(r[cAmtCol]), qty: num(r[cQty])
+      });
+    }
+    const custAgg = aggregate(custRecords).sort((a,b)=>b.�����-a.�����);
+
+    /* ---- ǰ�� ---- */
+    logStatus("- ǰ�� �Ǹ���Ȳ �д� ��...");
+    const iRows = parseCSV(await readFileSmart(itemFile));
+    const iH = findHeaderRow(iRows, ["ǰ���ڵ�"]);
+    const iHead = iRows[iH].map(x=>String(x).trim());
+    const iCode = colIndex(iHead, ["ǰ���ڵ�"]);
+    const iName = colIndex(iHead, ["ǰ���(�԰�)"], ["ǰ���"]);
+    const iQty  = colIndex(iHead, ["����"]);
+    const iAmt  = colIndex(iHead, ["���ް���"], null);
+    const iSum  = colIndex(iHead, ["�հ�"]);
+    const iDate = colIndex(iHead, ["����-No.","����-No"], ["����"]);
+    const iCust = colIndex(iHead, ["�ŷ�ó��"]);
+    const iAmtCol = iAmt>=0 ? iAmt : iSum;
+    if(iCode<0) throw new Error("ǰ�� ���Ͽ��� 'ǰ���ڵ�' �÷��� ã�� ���߽��ϴ�.");
+
+    const itemRecords = [];
+    const directRows = [];
+    for(let i=iH+1;i<iRows.length;i++){
+      const r = iRows[i];
+      if(!r || iCode>=r.length) continue;
+      const code = String(r[iCode]||"").trim();
+      if(!code) continue;
+      const name = iName>=0 ? String(r[iName]||"") : "";
+      const amount = num(r[iAmtCol]);
+      const qty = num(r[iQty]);
+      const k = firstLetter(code);
+      const cat = itemMap[k] || (k? "�̺з�("+k+")":"�̺з�");
+      itemRecords.push({key:cat, amount, qty});
+
+      if(code.includes("����")){
+        const brand = findBrand(name);
+        if(brand){
+          directRows.push({
+            date: iDate>=0? String(r[iDate]||""):"",
+            code, name,
+            cust: iCust>=0? String(r[iCust]||""):"",
+            brand, cat, qty, amount
+          });
+        }
+      }
+    }
+    const itemAgg = aggregate(itemRecords).sort((a,b)=>b.�����-a.�����);
+
+    /* ---- ���� ���� (�귣�� + ǰ��з� ����) ---- */
+    const comboMap = new Map();
+    for(const d of directRows){
+      const key = d.brand + "||" + d.cat;
+      let o = comboMap.get(key);
+      if(!o){ o={brand:d.brand, cat:d.cat, ����:0, �����:0, �Ǽ�:0}; comboMap.set(key,o); }
+      o.���� += d.qty; o.����� += d.amount; o.�Ǽ� += 1;
+    }
+    const combo = [...comboMap.values()].sort((a,b)=>
+      a.brand<b.brand ? -1 : a.brand>b.brand ? 1 : b.�����-a.�����);
+
+    /* ---- ǥ ---- */
+    const tCust = makeTable("�ŷ�ó�з���",
+      ["�ŷ�ó�з���","�����","�Ǽ�","����"], ["�����","�Ǽ�","����"],
+      custAgg.map(o=>[o.key,o.�����,o.�Ǽ�,o.����]), true);
+    const tItem = makeTable("ǰ��з���",
+      ["ǰ��з���","�����","�Ǽ�","����"], ["�����","�Ǽ�","����"],
+      itemAgg.map(o=>[o.key,o.�����,o.�Ǽ�,o.����]), true);
+    const tDirect = makeTable("����_����",
+      ["�귣��","ǰ��з���","����","�����","�Ǽ�"], ["����","�����","�Ǽ�"],
+      combo.map(o=>[o.brand,o.cat,o.����,o.�����,o.�Ǽ�]), true);
+    const tDDetail = makeTable("����_��",
+      ["����-No.","ǰ���ڵ�","ǰ���","�ŷ�ó��","�귣��","ǰ��з���","����","�����"],
+      ["����","�����"],
+      directRows.map(d=>[d.date,d.code,d.name,d.cust,d.brand,d.cat,d.qty,d.amount]), true);
+
+    resultTables = [tCust, tItem, tDirect, tDDetail];
+
+    const totalCust = custAgg.reduce((s,o)=>s+o.�����,0);
+    const totalItem = itemAgg.reduce((s,o)=>s+o.�����,0);
+    const totalDirect = directRows.reduce((s,d)=>s+d.amount,0);
+    const totalDirectQty = directRows.reduce((s,d)=>s+d.qty,0);
+
+    renderKPIs([
+      {k:"�ŷ�ó ���� �Ѹ���", v:fmt(totalCust)+" ��"},
+      {k:"ǰ�� ���� �Ѹ���", v:fmt(totalItem)+" ��"},
+      {k:"���� ����", v:fmt(totalDirect)+" ��"},
+      {k:"���� ���� / �Ǽ�", v:fmt(totalDirectQty)+" / "+directRows.length+"��"}
+    ]);
+    renderTables(resultTables);
+
+    logStatus("- ���� ǰ�� "+directRows.length+"��, ���� "+fmt(totalDirectQty)
+              +", ���� "+fmt(totalDirect)+"��");
+    logStatus("�Ϸ�! ������ ����� Ȯ���ϰ� '���� �ٿ�ε�'�� �����ϼ���.");
+
+    $("results").classList.remove("hide");
+    $("xlsBtn").disabled = false;
+  }catch(err){
+    logStatus("[����] " + (err && err.message ? err.message : err));
+    alert("�м� �� ������ �߻��߽��ϴ�:\n\n" + (err && err.message ? err.message : err));
+  }finally{
+    $("runBtn").disabled = false;
+  }
+}
+
+function renderKPIs(items){
+  $("kpis").innerHTML = items.map(it =>
+    '<div class="kpi"><div class="k">'+it.k+'</div><div class="v">'+it.v+'</div></div>'
+  ).join("");
+}
+function renderTables(tables){
+  const tb = $("tabbtns"); tb.innerHTML="";
+  const wrap = $("tables"); wrap.innerHTML="";
+  tables.forEach((t,idx)=>{
+    const btn = document.createElement("button");
+    btn.textContent = t.name;
+    btn.className = idx===0 ? "active":"";
+    btn.onclick = ()=>{
+      [...tb.children].forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");
+      [...wrap.children].forEach(d=>d.classList.add("hide"));
+      $("tbl_"+idx).classList.remove("hide");
+    };
+    tb.appendChild(btn);
+
+    const div = document.createElement("div");
+    div.id = "tbl_"+idx;
+    div.className = "tablewrap" + (idx===0?"":" hide");
+    div.innerHTML = tableHTML(t);
+    wrap.appendChild(div);
+  });
+}
+function tableHTML(t){
+  let h = "<table><thead><tr>";
+  t.columns.forEach(c=>{
+    const cls = t.numeric.includes(c) ? "num":"";
+    h += '<th class="'+cls+'">'+escapeHTML(c)+'</th>';
+  });
+  h += "</tr></thead><tbody>";
+  t.rows.forEach(row=>{
+    const isTotal = row[0]==="���հ�";
+    h += '<tr class="'+(isTotal?"total":"")+'">';
+    row.forEach((v,ci)=>{
+      const isNum = t.numeric.includes(t.columns[ci]) && typeof v==="number";
+      h += '<td class="'+(isNum?"num":"")+'">'+(isNum?fmt(v):escapeHTML(v==null?"":String(v)))+'</td>';
+    });
+    h += "</tr>";
+  });
+  h += "</tbody></table>";
+  return h;
+}
+function escapeHTML(s){
+  return String(s).replace(/[&<>"']/g, c =>
+    ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+/* ===== ����(���� ��Ʈ) �ٿ�ε� : SpreadsheetML(.xls) ===== */
+function escapeXML(s){
+  return String(s).replace(/[&<>"']/g, c =>
+    ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&apos;"}[c]));
+}
+function exportExcel(){
+  if(!resultTables){ alert("���� �м��� �����ϼ���."); return; }
+  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+  xml += '<?mso-application progid="Excel.Sheet"?>\n';
+  xml += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" '
+       + 'xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n';
+  for(const t of resultTables){
+    xml += '<Worksheet ss:Name="'+escapeXML(t.name)+'"><Table>\n';
+    xml += '<Row>'+t.columns.map(c=>
+      '<Cell><Data ss:Type="String">'+escapeXML(c)+'</Data></Cell>').join('')+'</Row>\n';
+    for(const row of t.rows){
+      xml += '<Row>'+row.map((v,ci)=>{
+        const isNum = t.numeric.includes(t.columns[ci]) && typeof v==="number";
+        if(isNum) return '<Cell><Data ss:Type="Number">'+v+'</Data></Cell>';
+        return '<Cell><Data ss:Type="String">'+escapeXML(v==null?"":String(v))+'</Data></Cell>';
+      }).join('')+'</Row>\n';
+    }
+    xml += '</Table></Worksheet>\n';
+  }
+  xml += '</Workbook>';
+
+  const now = new Date();
+  const p = n => String(n).padStart(2,"0");
+  const stamp = now.getFullYear()+p(now.getMonth()+1)+p(now.getDate())
+              +"_"+p(now.getHours())+p(now.getMinutes())+p(now.getSeconds());
+  const blob = new Blob(["\uFEFF"+xml], {type:"application/vnd.ms-excel;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "����м����_"+stamp+".xls";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+}
+
+/* ===== ������ ���� �ҷ����� ǥ�� ===== */
+function updateName(id){
+  const inp = $(id);
+  const span = $("name_"+id);
+  if(inp.files && inp.files[0]){
+    span.textContent = inp.files[0].name;
+    span.classList.add("loaded");
+  }else{
+    span.textContent = "���õ� ���� ����";
+    span.classList.remove("loaded");
+  }
+}
+document.querySelectorAll(".load").forEach(btn=>{
+  btn.addEventListener("click", ()=> $(btn.dataset.target).click());
+});
+["itemFile","custFile"].forEach(id=>{
+  $(id).addEventListener("change", ()=>updateName(id));
+});
+document.querySelectorAll(".clear").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    const inp = $(btn.dataset.target);
+    inp.value = "";
+    updateName(btn.dataset.target);
+  });
+});
+
+/* ===== �з�ǥ(��Ī) : ���� 1ȸ ��� �� �������� ���� ===== */
+function safeGet(key){ try{ return localStorage.getItem(key); }catch(e){ return null; } }
+function safeSet(key,val){ try{ localStorage.setItem(key,val); return true; }catch(e){ return false; } }
+function safeDel(key){ try{ localStorage.removeItem(key); }catch(e){} }
+
+function setMapStatus(spanId, stored, count){
+  const s = $(spanId);
+  if(stored){ s.textContent = "����� ��Īǥ ��� �� ("+count+"�� �з�)"; s.classList.add("loaded"); }
+  else{ s.textContent = "�⺻ ���尪 ��� ��"; s.classList.remove("loaded"); }
+}
+function loadStoredMaps(){
+  const it = safeGet(LS_ITEM);
+  if(it){ try{ const m=JSON.parse(it); currentItemMap=m;
+    setMapStatus("status_itemMap", true, Object.keys(m).length); }catch(e){} }
+  const ct = safeGet(LS_CUST);
+  if(ct){ try{ const m=JSON.parse(ct); currentCustMap=m;
+    setMapStatus("status_custMap", true, Object.keys(m).length); }catch(e){} }
+}
+
+$("itemMapFile").addEventListener("change", async ()=>{
+  const f = $("itemMapFile").files[0];
+  if(!f) return;
+  const m = buildMap(parseCSV(await readFileSmart(f)), DEFAULT_ITEM_MAP);
+  currentItemMap = m;
+  safeSet(LS_ITEM, JSON.stringify(m));
+  setMapStatus("status_itemMap", true, Object.keys(m).length);
+});
+$("custMapFile").addEventListener("change", async ()=>{
+  const f = $("custMapFile").files[0];
+  if(!f) return;
+  const m = buildMap(parseCSV(await readFileSmart(f)), DEFAULT_CUST_MAP);
+  currentCustMap = m;
+  safeSet(LS_CUST, JSON.stringify(m));
+  setMapStatus("status_custMap", true, Object.keys(m).length);
+});
+$("resetItemMap").addEventListener("click", ()=>{
+  safeDel(LS_ITEM); currentItemMap = Object.assign({},DEFAULT_ITEM_MAP);
+  $("itemMapFile").value=""; setMapStatus("status_itemMap", false);
+});
+$("resetCustMap").addEventListener("click", ()=>{
+  safeDel(LS_CUST); currentCustMap = Object.assign({},DEFAULT_CUST_MAP);
+  $("custMapFile").value=""; setMapStatus("status_custMap", false);
+});
+
+/* ===== ���� ===== */
+loadStoredMaps();
+$("runBtn").addEventListener("click", runAnalysis);
+$("xlsBtn").addEventListener("click", exportExcel);
+</script>
+</body>
+</html>
