@@ -20,16 +20,16 @@ from sales_analysis.constants import (
 
 logger = logging.getLogger(__name__)
 
-ITEM_CODE_PATTERN = re.compile(r"^[a-z]+", re.ASCII)
-CUSTOMER_PREFIX_PATTERN = re.compile(r"^([A-Z])")
-VALID_ITEM_ROW_PATTERN = re.compile(r"^[a-z]+", re.ASCII)
+ITEM_CODE_PATTERN = re.compile(r"^[a-zA-Z]+", re.ASCII)
+CUSTOMER_PREFIX_PATTERN = re.compile(r"^([a-zA-Z])", re.ASCII)
+VALID_ITEM_ROW_PATTERN = re.compile(r"^[a-zA-Z]+", re.ASCII)
 
 
 def extract_item_category_code(item_code: str) -> str:
     if not item_code:
         return ""
     match = ITEM_CODE_PATTERN.match(str(item_code).strip())
-    return match.group(0) if match else ""
+    return match.group(0).lower() if match else ""
 
 
 def extract_customer_category_code(customer_code: str) -> str:
@@ -42,13 +42,13 @@ def extract_customer_category_code(customer_code: str) -> str:
 def resolve_item_category_name(code: str) -> str:
     if not code:
         return UNCLASSIFIED_LABEL
-    return ITEM_CATEGORIES.get(code, UNCLASSIFIED_LABEL)
+    return ITEM_CATEGORIES.get(code.lower(), UNCLASSIFIED_LABEL)
 
 
 def resolve_customer_category_name(code: str) -> str:
     if not code:
         return UNCLASSIFIED_LABEL
-    return CUSTOMER_CATEGORIES.get(code, UNCLASSIFIED_LABEL)
+    return CUSTOMER_CATEGORIES.get(code.lower(), UNCLASSIFIED_LABEL)
 
 
 def parse_number(value: Any) -> Decimal | None:

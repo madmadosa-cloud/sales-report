@@ -15,11 +15,15 @@ from sales_analysis.services.classification import (
 class ClassificationTest(TestCase):
     def test_item_category_extraction(self):
         self.assertEqual(extract_item_category_code("b001-2024-3"), "b")
+        self.assertEqual(extract_item_category_code("B001-2024-3"), "b")
         self.assertEqual(extract_item_category_code("z001-1"), "z")
+        self.assertEqual(extract_item_category_code("Z001-1"), "z")
 
     def test_customer_category_extraction(self):
         self.assertEqual(extract_customer_category_code("E1-00145"), "e")
+        self.assertEqual(extract_customer_category_code("e1-00145"), "e")
         self.assertEqual(extract_customer_category_code("B15-00006"), "b")
+        self.assertEqual(extract_customer_category_code("b15-00006"), "b")
 
     def test_voucher_year_month(self):
         self.assertEqual(parse_voucher_year_month("20250102-1"), (2025, 1))
@@ -27,8 +31,23 @@ class ClassificationTest(TestCase):
 
     def test_resolve_names(self):
         self.assertEqual(resolve_item_category_name("b"), ITEM_CATEGORIES["b"])
+        self.assertEqual(resolve_item_category_name("B"), ITEM_CATEGORIES["b"])
         self.assertEqual(resolve_customer_category_name("e"), CUSTOMER_CATEGORIES["e"])
+        self.assertEqual(resolve_customer_category_name("E"), CUSTOMER_CATEGORIES["e"])
         self.assertEqual(resolve_item_category_name("xx"), "미분류")
+
+    def test_parse_sales_csv_uppercase_item_code(self):
+        sample = (
+            "품목코드,품목명(규격),전표별,품목별,거래처별,수량,거래처코드,공급가액,부가세,합계,적요\n"
+            "B001-2024-3,핸드타올,20250102-1,핸드타올,테스트,15,e1-00145,495000,0,495000,\n"
+        ).encode("utf-8-sig")
+        records, _ = parse_sales_csv(sample, "test.csv")
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["item_category_code"], "b")
+        self.assertEqual(records[0]["item_category_name"], ITEM_CATEGORIES["b"])
+        self.assertEqual(records[0]["customer_category_code"], "e")
+        self.assertFalse(records[0]["is_unclassified_item"])
+        self.assertFalse(records[0]["is_unclassified_customer"])
 
 
 class CsvParserTest(TestCase):
