@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+db.sqlite3
+staticfiles/
+media/
+*.xlsx
+*.pdf
+*_out.txt
+verify_out.txt
+detail_out.txt

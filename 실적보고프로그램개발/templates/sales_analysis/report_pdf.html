@@ -1,0 +1,66 @@
+{% load sales_extras %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @page { size: A3 landscape; margin: 10mm; }
+    {% if font_url %}
+    @font-face { font-family: ReportFont; src: url('{{ font_url }}'); }
+    {% endif %}
+    body { font-family: ReportFont, "Malgun Gothic", sans-serif; font-size: 6px; margin: 0; }
+    h1 { font-size: 14px; margin: 0 0 10px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #999; padding: 2px 3px; text-align: right; }
+    th { background: #eef1f9; text-align: center; font-size: 6px; }
+    td:first-child, td:nth-child(2), th:first-child, th:nth-child(2) { text-align: left; }
+    tr.total td { font-weight: bold; background: #fff7e6; }
+    tr.subtotal td { font-weight: bold; background: #e8f0fe; }
+  </style>
+</head>
+<body>
+  <h1>{{ report.period_label }} 매출분석</h1>
+  <table>
+    <thead>
+      <tr>
+        <th>판매처</th>
+        <th>품목분류</th>
+        <th>총계 건수</th>
+        <th>총계 수량</th>
+        <th>총계 금액(천원)</th>
+        {% for block in report.period_blocks %}
+        <th>{{ block.label }} 건수</th>
+        <th>{{ block.label }} 수량</th>
+        <th>{{ block.label }} 금액</th>
+        {% endfor %}
+        {% for m in report.months %}
+        <th>{{ m }}월 건수</th>
+        <th>{{ m }}월 수량</th>
+        <th>{{ m }}월 금액</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in report.rows %}
+      <tr class="{% if row.row_type == 'total' %}total{% elif row.row_type == 'subtotal' %}subtotal{% endif %}">
+        <td>{{ row.customer_label }}</td>
+        <td>{{ row.item_label }}</td>
+        <td>{{ row.total.count|comma }}</td>
+        <td>{{ row.total.quantity|comma_qty }}</td>
+        <td>{{ row.total.amount_thousand|comma }}</td>
+        {% for block in report.period_blocks %}
+        <td>{{ row|block_count:block.block_id|comma }}</td>
+        <td>{{ row|block_quantity:block.block_id|comma_qty }}</td>
+        <td>{{ row|block_amount:block.block_id|comma }}</td>
+        {% endfor %}
+        {% for m in report.months %}
+        <td>{{ row|month_count:m|comma }}</td>
+        <td>{{ row|month_quantity:m|comma_qty }}</td>
+        <td>{{ row|month_amount:m|comma }}</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>

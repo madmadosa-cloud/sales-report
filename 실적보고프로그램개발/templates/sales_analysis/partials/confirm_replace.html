@@ -1,0 +1,29 @@
+{% load sales_extras %}
+<div class="confirm-box">
+  <p><strong>이미 저장된 자료가 있습니다.</strong> 아래 연월 데이터를 삭제하고 새 자료로 교체하시겠습니까?</p>
+  <ul>
+    {% for year, month in existing_periods %}
+    <li>{{ year }}년 {{ month }}월 자료가 이미 존재합니다.</li>
+    {% endfor %}
+  </ul>
+  <p class="hint">신규 업로드 {{ total_rows|comma }}행 대기 중</p>
+  {% if warnings %}
+  <ul class="hint">
+    {% for w in warnings %}<li>{{ w }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+  <div style="display:flex;gap:10px;margin-top:12px;">
+    {% csrf_token %}
+    <button
+      class="btn danger"
+      hx-post="{% url 'sales_analysis:upload_confirm' %}"
+      hx-target="#upload-status"
+      hx-swap="innerHTML"
+    >
+      기존 데이터 삭제 후 교체
+    </button>
+    <button type="button" class="btn secondary" onclick="document.getElementById('upload-status').innerHTML=''">
+      취소
+    </button>
+  </div>
+</div>

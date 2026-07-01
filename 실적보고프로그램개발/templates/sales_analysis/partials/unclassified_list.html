@@ -1,0 +1,35 @@
+{% extends "sales_analysis/base.html" %}
+{% load sales_extras %}
+
+{% block title %}미분류 매출{% endblock %}
+
+{% block content %}
+<section class="card">
+  <h2>미분류 매출 원자료{% if year %} ({{ year }}년){% endif %}</h2>
+  {% if records %}
+  <div class="tablewrap">
+    <table class="report-table">
+      <thead>
+        <tr>
+          {% for key in records.0.keys %}
+          <th>{{ key }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for rec in records %}
+        <tr>
+          {% for key in records.0.keys %}
+          <td>{% if key == "합계" %}{{ rec|get_item:key|comma }}{% else %}{{ rec|get_item:key }}{% endif %}</td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="hint">미분류 데이터가 없습니다.</p>
+  {% endif %}
+  <p><a href="{% url 'sales_analysis:index' %}">← 돌아가기</a></p>
+</section>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% load sales_extras %}
+{% if error %}
+<div class="status-box error">{{ error }}</div>
+{% endif %}
+
+{% if success %}
+<div class="status-box success">
+  {{ count|comma }}건 저장되었습니다.
+  {% if warnings %}
+  <ul>
+    {% for w in warnings %}
+    <li>{{ w }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+<div class="period-chips" hx-swap-oob="true" id="stored-periods-oob">
+  {% if stored_periods %}
+  <span class="hint">저장된 자료:</span>
+  {% for p in stored_periods %}
+  <span class="chip">{{ p.year }}년 {{ p.month }}월 ({{ p.row_count|comma }}행)</span>
+  {% endfor %}
+  {% endif %}
+</div>
+{% endif %}

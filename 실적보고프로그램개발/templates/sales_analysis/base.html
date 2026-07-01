@@ -1,0 +1,36 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}매출 분석{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'sales_analysis/css/main.css' %}">
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+</head>
+<body>
+  <header class="app-header">
+    <h1>매출 분석 프로그램</h1>
+    <p>품목분류별 · 거래처분류별 · 월별 매출 집계 및 보고서 생성</p>
+  </header>
+  <main>
+    {% if messages %}
+    <ul class="messagelist">
+      {% for message in messages %}
+      <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+  {% block extra_js %}{% endblock %}
+  <script>
+  document.body.addEventListener('htmx:configRequest', function(event) {
+    var token = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (token) {
+      event.detail.headers['X-CSRFToken'] = token.value;
+    }
+  });
+  </script>
+</body>
+</html>
