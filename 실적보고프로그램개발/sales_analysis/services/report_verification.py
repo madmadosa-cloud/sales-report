@@ -189,7 +189,7 @@ def verify_report(
     elif report.is_simple or report.is_welfare:
         manual = _remap_manual_for_simple(manual)
         service = remap_bucket_for_simple(service)
-    if report.is_welfare:
+    if report.is_welfare or report.is_final:
         manual = _remap_manual_for_welfare(manual)
         service = remap_bucket_for_welfare(service)
 
@@ -350,7 +350,7 @@ def verify_report(
     elif report.is_final:
         count_detail = (
             f"총계 {result.report_grand_count:,}건 "
-            f"(최종: a~d 통합 / 기타·생산시설·미분류)"
+            f"(최종: 복지부 출력항목 / a~d 통합 / 기타·생산시설·미분류)"
         )
     elif report.is_simple:
         count_detail = (
@@ -428,7 +428,7 @@ def verify_report(
         elif report.is_final:
             warnings.append(
                 f"미분류 원자료 {result.unclassified_row_count:,}건 - "
-                "최종보고서 「기타·생산시설·미분류」 구간에 포함됩니다."
+                "최종보고서 「기타·생산시설·미분류」 구간 및 기타 출력항목에 포함됩니다."
             )
         elif report.is_simple:
             warnings.append(

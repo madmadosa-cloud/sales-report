@@ -24,7 +24,7 @@
     <thead>
       <tr>
         <th>판매처</th>
-        <th>{% if report.is_welfare %}출력항목{% else %}품목분류{% endif %}</th>
+        <th>{% if report.is_welfare or report.is_final %}출력항목{% else %}품목분류{% endif %}</th>
         <th>총계 건수</th>
         <th>총계 수량</th>
         <th>총계 금액(천원)</th>

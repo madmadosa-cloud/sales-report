@@ -307,12 +307,12 @@ def build_sales_report(
         bucket = remap_bucket_for_final(bucket)
     elif use_simple_customers:
         bucket = remap_bucket_for_simple(bucket)
-    if welfare:
+    if welfare or final:
         bucket = remap_bucket_for_welfare(bucket)
 
     item_categories = get_item_category_map()
     customer_categories = get_customer_category_map()
-    item_order = get_welfare_group_order() if welfare else get_item_category_order()
+    item_order = get_welfare_group_order() if (welfare or final) else get_item_category_order()
 
     unclassified_count = filtered.filter(
         Q(is_unclassified_item=True) | Q(is_unclassified_customer=True)
@@ -333,7 +333,7 @@ def build_sales_report(
         section_rows: list[ReportRow] = []
 
         for item_code in item_order:
-            if welfare:
+            if welfare or final:
                 item_name = get_welfare_group_labels()[item_code]
             else:
                 item_name = item_categories[item_code]

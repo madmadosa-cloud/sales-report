@@ -16,15 +16,10 @@ from sales_analysis.constants import (
 from sales_analysis.models import SalesRecord
 
 from sales_analysis.services.aggregation import (
-
     belongs_in_merged_group,
-
     build_sales_report,
-
     effective_customer_code,
-
 )
-
 
 
 
@@ -160,6 +155,11 @@ class SimpleReportTest(TestCase):
         self.assertEqual(merged_sub.customer_label, SIMPLE_MERGED_LABEL)
         self.assertEqual(merged_sub.total.count, 2)
         self.assertEqual(report.rows[0].total.count, 4)
+        final_item_rows = [r for r in report.rows if r.row_type == "item"]
+        self.assertTrue(final_item_rows)
+        self.assertNotIn("a", {r.item_code for r in final_item_rows})
+        self.assertIn("office", {r.item_code for r in final_item_rows})
+        self.assertIn("사무문구", {r.item_label for r in final_item_rows})
 
 
 def get_seed_item_codes():
