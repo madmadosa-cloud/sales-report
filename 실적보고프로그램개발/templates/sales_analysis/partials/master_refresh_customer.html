@@ -1,0 +1,6 @@
+{% include "sales_analysis/partials/customer_category_panel.html" %}
+{% if message %}
+<div id="master-status" hx-swap-oob="innerHTML">
+  <div class="status-box success">{{ message }}</div>
+</div>
+{% endif %}

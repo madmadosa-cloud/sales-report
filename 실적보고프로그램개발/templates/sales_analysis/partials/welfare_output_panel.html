@@ -1,0 +1,70 @@
+<h3>복지부 출력항목 · 품목코드</h3>
+<p class="desc">보고서 행 순서는 정렬 순서를 따릅니다. 미매핑 품목코드는 기본항목(기타)으로 합산됩니다.</p>
+
+<form
+  class="master-form welfare-form"
+  hx-post="{% url 'sales_analysis:welfare_output_create' %}"
+  hx-target="#welfare-panel"
+  hx-swap="innerHTML"
+>
+  {% csrf_token %}
+  <label>내부코드 <input type="text" name="code" maxlength="32" required placeholder="facility"></label>
+  <label>출력항목 <input type="text" name="name" maxlength="64" required placeholder="시설설비"></label>
+  <label>품목코드 <input type="text" name="item_codes" placeholder="o, q, t, u"></label>
+  <label>정렬 <input type="number" name="sort_order" min="0" placeholder="자동"></label>
+  <label><input type="checkbox" name="is_active" checked> 사용</label>
+  <button type="submit" class="btn">추가</button>
+</form>
+
+<div class="tablewrap">
+  <table class="master-table welfare-table">
+    <thead>
+      <tr>
+        <th>출력항목</th>
+        <th>품목코드</th>
+        <th>정렬</th>
+        <th>사용</th>
+        <th>관리</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in welfare_items %}
+      <tr class="{% if not row.is_active %}inactive-row{% endif %}">
+        <td>
+          <strong>{{ row.name }}</strong>
+          {% if row.is_fallback %}<span class="hint">(기본)</span>{% endif %}
+          <div class="hint">{{ row.code }}</div>
+        </td>
+        <td colspan="4">
+          <form
+            class="master-inline-form welfare-inline-form"
+            hx-post="{% url 'sales_analysis:welfare_output_update' row.code %}"
+            hx-target="#welfare-panel"
+            hx-swap="innerHTML"
+          >
+            {% csrf_token %}
+            <input type="hidden" name="code" value="{{ row.code }}">
+            <input type="text" name="name" value="{{ row.name }}" maxlength="64" required>
+            <input type="text" name="item_codes" value="{{ row.item_codes }}" placeholder="품목코드 (쉼표 구분)">
+            <input type="number" name="sort_order" value="{{ row.sort_order }}" min="0" class="sort-input">
+            <label><input type="checkbox" name="is_active" {% if row.is_active %}checked{% endif %}> 사용</label>
+            <button type="submit" class="btn small secondary">저장</button>
+            {% if not row.is_fallback %}
+            <button
+              type="button"
+              class="btn small danger"
+              hx-post="{% url 'sales_analysis:welfare_output_delete' row.code %}"
+              hx-target="#welfare-status"
+              hx-swap="innerHTML"
+              hx-confirm="출력항목 '{{ row.name }}'을(를) 삭제하시겠습니까?"
+            >삭제</button>
+            {% endif %}
+          </form>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5">등록된 복지부 출력항목이 없습니다.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

@@ -65,7 +65,23 @@
       hx-target="#report-preview"
       hx-swap="innerHTML"
     >간편보고서</button>
-    <span class="hint">간편: 기타·생산시설·미분류 통합</span>
+    <button
+      type="button"
+      class="btn secondary"
+      hx-post="{% url 'sales_analysis:report_generate_welfare' %}"
+      hx-include="#report-form"
+      hx-target="#report-preview"
+      hx-swap="innerHTML"
+    >복지부보고서</button>
+    <button
+      type="button"
+      class="btn secondary"
+      hx-post="{% url 'sales_analysis:report_generate_final' %}"
+      hx-include="#report-form"
+      hx-target="#report-preview"
+      hx-swap="innerHTML"
+    >최종보고서</button>
+    <span class="hint">간편: 기타·생산시설·미분류 통합 · 복지부: 출력항목별 품목 합산 · 최종: 거래처 2구간</span>
   </form>
 </section>
 

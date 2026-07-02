@@ -1,0 +1,28 @@
+<div class="confirm-box">
+  <h4>전체 교체 확인</h4>
+  <p>
+    {% if kind == "item" %}품목{% else %}거래처{% endif %}분류 마스터를 업로드 파일 내용으로 <strong>전체 교체</strong>합니다.
+    기존 마스터에만 있고 파일에 없는 코드는 삭제됩니다.
+  </p>
+  <ul>
+    <li>업로드 항목: {{ preview.rows|length }}건</li>
+    <li>신규 추가: {{ preview.new_codes|length }}건{% if preview.new_codes %} ({{ preview.new_codes|join:", " }}){% endif %}</li>
+    <li>이름 수정: {{ preview.updated_codes|length }}건{% if preview.updated_codes %} ({{ preview.updated_codes|join:", " }}){% endif %}</li>
+    <li>삭제 예정: {{ preview.removed_codes|length }}건{% if preview.removed_codes %} ({{ preview.removed_codes|join:", " }}){% endif %}</li>
+  </ul>
+  {% if preview.removed_codes %}
+  <p class="hint">삭제되는 코드가 매출 데이터에서 사용 중이면 해당 데이터는 미분류로 표시됩니다.</p>
+  {% endif %}
+  <form
+    hx-post="{% if kind == 'item' %}{% url 'sales_analysis:item_category_upload_confirm' %}{% else %}{% url 'sales_analysis:customer_category_upload_confirm' %}{% endif %}"
+    hx-target="{% if kind == 'item' %}#item-panel{% else %}#customer-panel{% endif %}"
+    hx-swap="innerHTML"
+    style="display:flex; gap:8px; flex-wrap:wrap;"
+  >
+    {% csrf_token %}
+    <input type="hidden" name="confirm" value="1">
+    <button type="submit" class="btn danger">전체 교체 실행</button>
+    <button type="button" class="btn secondary" onclick="document.getElementById('master-status').innerHTML=''">취소</button>
+  </form>
+</div>
+

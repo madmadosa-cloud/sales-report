@@ -1,0 +1,23 @@
+{% extends "sales_analysis/base.html" %}
+
+{% block title %}복지부 분류코드 관리 — 매출 분석{% endblock %}
+
+{% block content %}
+<section class="card">
+  <h2>복지부 분류코드 관리</h2>
+  <p class="desc">
+    복지부보고서의 출력항목별로 합산할 품목분류코드를 관리합니다.
+    품목코드는 영문 소문자 1글자(a~z)이며, 한 코드는 하나의 출력항목에만 배정됩니다.
+  </p>
+  <p>
+    <a href="{% url 'sales_analysis:index' %}" class="btn secondary">← 매출 분석 홈</a>
+    <a href="{% url 'sales_analysis:category_master' %}" class="btn secondary">분류코드 관리</a>
+  </p>
+</section>
+
+<div id="welfare-status"></div>
+
+<section class="card" id="welfare-panel">
+  {% include "sales_analysis/partials/welfare_output_panel.html" %}
+</section>
+{% endblock %}

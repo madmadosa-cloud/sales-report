@@ -1,3 +1,14 @@
+# ===== Portable / build output =====
+배포용/
+실적보고프로그램개발/실적보고프로그램배포용/
+dist/
+build/
+*.spec
+
+# ===== App session / saved analysis data =====
+저장데이터/
+다운로드/
+
 # ===== Generated output files =====
 *.xls
 *.xlsx

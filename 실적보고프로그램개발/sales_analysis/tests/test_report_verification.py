@@ -20,9 +20,7 @@ class ReportVerificationTest(TestCase):
                 voucher_no=voucher,
                 item_code=item_code,
                 item_category_code=item_cat,
-                item_category_name="테스트",
                 customer_category_code=cust_cat,
-                customer_category_name="테스트",
                 quantity=Decimal("1"),
                 total=Decimal(total),
             )

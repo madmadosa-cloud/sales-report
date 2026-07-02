@@ -1,0 +1,113 @@
+{% extends "sales_analysis/base.html" %}
+
+{% load sales_extras %}
+
+
+
+{% block title %}이익분석 — 매출 분석{% endblock %}
+
+
+
+{% block content %}
+
+<section class="card">
+
+  <h2>이익자료 업로드</h2>
+
+  <p class="desc">
+
+    ERP <strong>품목/거래처별이익현황</strong> CSV를 업로드합니다.
+
+    품목코드·판매 수량·원가·이익금을 사용하며, 품목분류는 품목코드 앞 영문자로 자동 분류합니다.
+
+  </p>
+
+  <form
+
+    hx-post="{% url 'sales_analysis:profit_upload' %}"
+
+    hx-target="#profit-upload-status"
+
+    hx-swap="innerHTML"
+
+    hx-encoding="multipart/form-data"
+
+    class="upload-row profit-upload-form"
+
+  >
+
+    {% csrf_token %}
+
+    <label>조회기간(표시용)
+
+      <input type="text" name="period_label" maxlength="128" required placeholder="예: 2026/01/01~06/30">
+
+    </label>
+
+    <input type="file" name="files" accept=".csv" required>
+
+    <button type="submit" class="btn">파일 업로드</button>
+
+    <span class="htmx-indicator hint">처리 중…</span>
+
+  </form>
+
+  <div id="profit-upload-status"></div>
+
+  {% if stored_summary %}
+
+  <div class="period-chips" id="profit-stored-chips">
+
+    <span class="hint">저장된 자료:</span>
+
+    <span class="chip">{{ stored_summary.period_label }} ({{ stored_summary.row_count|comma }}행)</span>
+
+  </div>
+
+  {% else %}
+
+  <p class="hint" id="profit-empty-hint">아직 저장된 이익 자료가 없습니다.</p>
+
+  <div class="period-chips" id="profit-stored-chips" hidden></div>
+
+  {% endif %}
+
+</section>
+
+
+
+<section class="card">
+
+  <h2>보고서 생성</h2>
+
+  <p class="desc">업로드된 이익자료 전체를 집계합니다. 월별 구분 없이 원가·이익금(천원) 기준으로 표시합니다.</p>
+
+  <div id="profit-report-actions" class="report-period" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+    {% include "sales_analysis/partials/profit_report_actions.html" with has_data=stored_summary %}
+  </div>
+
+</section>
+
+
+
+<section class="card" id="profit-report-section">
+
+  <div id="profit-report-preview">
+
+    {% if last_report %}
+
+      {% include "sales_analysis/partials/profit_report_preview.html" with report=last_report %}
+
+    {% else %}
+
+    <p class="hint">이익자료를 업로드한 뒤 「보고서 생성」 또는 「복지부보고서」를 클릭하세요.</p>
+
+    {% endif %}
+
+  </div>
+
+</section>
+
+{% endblock %}
+
+

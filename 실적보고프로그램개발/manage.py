@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# 사회복지시설 매출분석 프로그램
+# Author: madmadosa-cloud
+# License: MIT
 """Django's command-line utility for administrative tasks."""
 import os
 import sys

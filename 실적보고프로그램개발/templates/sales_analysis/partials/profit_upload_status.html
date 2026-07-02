@@ -1,0 +1,23 @@
+{% load sales_extras %}
+{% if error %}
+<div class="status-box error">{{ error }}</div>
+{% elif success %}
+<div class="status-box success">{{ count|comma }}건 저장되었습니다.</div>
+{% if warnings %}
+<ul class="hint">
+  {% for w in warnings %}<li>{{ w }}</li>{% endfor %}
+</ul>
+{% endif %}
+{% if stored_summary %}
+<div id="profit-stored-chips" hx-swap-oob="true">
+  <div class="period-chips">
+    <span class="hint">저장된 자료:</span>
+    <span class="chip">{{ stored_summary.period_label }} ({{ stored_summary.row_count|comma }}행)</span>
+  </div>
+</div>
+<div id="profit-empty-hint" hx-swap-oob="true" hidden></div>
+<div id="profit-report-actions" hx-swap-oob="true" class="report-period" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+  {% include "sales_analysis/partials/profit_report_actions.html" with has_data=True %}
+</div>
+{% endif %}
+{% endif %}

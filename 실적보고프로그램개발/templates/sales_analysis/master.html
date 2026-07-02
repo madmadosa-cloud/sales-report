@@ -1,0 +1,29 @@
+{% extends "sales_analysis/base.html" %}
+
+{% block title %}분류코드 관리 — 매출 분석{% endblock %}
+
+{% block content %}
+<section class="card">
+  <h2>분류코드 관리</h2>
+  <p class="desc">
+    품목·거래처 분류코드 마스터를 직접 입력하거나 CSV로 일괄 업로드합니다.
+    분류명 변경 시 과거 보고서에도 자동 반영됩니다.
+  </p>
+  <p><a href="{% url 'sales_analysis:index' %}" class="btn secondary">← 매출 분석 홈</a></p>
+</section>
+
+<div id="master-status"></div>
+
+<div class="master-grid">
+  <section class="card" id="item-panel">
+    {% include "sales_analysis/partials/item_category_panel.html" %}
+  </section>
+  <section class="card" id="customer-panel">
+    {% include "sales_analysis/partials/customer_category_panel.html" %}
+  <p>
+    <a href="{% url 'sales_analysis:index' %}" class="btn secondary">← 매출 분석 홈</a>
+    <a href="{% url 'sales_analysis:welfare_category_master' %}" class="btn secondary">복지부 분류코드 관리</a>
+  </p>
+</div>
+{% endblock %}
+

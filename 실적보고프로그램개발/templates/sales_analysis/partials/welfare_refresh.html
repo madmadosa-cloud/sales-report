@@ -1,0 +1,6 @@
+{% include "sales_analysis/partials/welfare_output_panel.html" %}
+{% if message %}
+<div id="welfare-status" hx-swap-oob="innerHTML">
+  <div class="status-box success">{{ message }}</div>
+</div>
+{% endif %}

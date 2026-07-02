@@ -13,6 +13,9 @@
 
 body {
   margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   font-family: "맑은 고딕", "Malgun Gothic", system-ui, sans-serif;
   background: var(--bg);
   color: var(--txt);
@@ -28,7 +31,9 @@ header.app-header h1 { margin: 0; font-size: 22px; }
 header.app-header p { margin: 6px 0 0; opacity: 0.9; font-size: 13px; }
 
 main {
+  flex: 1;
   max-width: min(98vw, 1680px);
+  width: 100%;
   margin: 0 auto;
   padding: 22px;
 }
@@ -203,6 +208,7 @@ tr.row-subtotal td { font-weight: bold; background: #e8f0fe !important; }
   font-weight: bold;
 }
 
+.verification-panel {
   border-radius: 10px;
   padding: 14px 16px;
   margin-bottom: 16px;
@@ -263,4 +269,191 @@ tr.row-subtotal td { font-weight: bold; background: #e8f0fe !important; }
   border-radius: 8px;
   font-size: 12px;
   color: var(--warn);
+}
+
+.app-nav {
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.app-nav a {
+  color: #fff;
+  text-decoration: none;
+  font-size: 13px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255,255,255,.45);
+  border-radius: 16px;
+}
+
+.app-nav a:hover { background: rgba(255,255,255,.15); }
+
+.master-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.master-tabs button {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.master-tabs button.is-active {
+  background: var(--blue);
+  color: #fff;
+  border-color: var(--blue);
+}
+
+.master-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+
+@media (min-width: 1100px) {
+  .master-grid { grid-template-columns: 1fr 1fr; }
+}
+
+table.master-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+table.master-table th,
+table.master-table td {
+  border: 1px solid var(--line);
+  padding: 8px 10px;
+  text-align: left;
+}
+
+table.master-table th { background: #eef1f9; }
+
+.master-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 14px;
+}
+
+.master-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.master-form input[type="text"],
+.master-form input[type="file"] {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.master-inline-form {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.master-inline-form input[type="text"] {
+  width: 90px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+
+.master-upload-form {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+
+.master-upload-form label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.master-upload-form .mode-options label {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-weight: normal;
+  margin-bottom: 6px;
+}
+
+.btn.small {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.inactive-row td { color: var(--muted); background: #fafafa; }
+
+footer.app-footer {
+  margin-top: auto;
+  padding: 14px 22px 18px;
+  text-align: center;
+  font-size: 11px;
+  color: #9aa3b2;
+  background: #fafbfe;
+  border-top: 1px solid var(--line);
+}
+
+footer.app-footer a {
+  color: #9aa3b2;
+  text-decoration: none;
+}
+
+footer.app-footer a:hover {
+  color: var(--muted);
+  text-decoration: underline;
+}
+
+.welfare-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px 14px;
+  align-items: end;
+}
+
+.welfare-inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.welfare-inline-form input[type="text"] {
+  min-width: 120px;
+}
+
+.welfare-inline-form .sort-input {
+  width: 64px;
+}
+
+.profit-upload-form label {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.profit-upload-form input[type="text"] {
+  min-width: 220px;
+  margin-right: 8px;
+}
+
+.profit-table th,
+.profit-table td {
+  min-width: 80px;
 }

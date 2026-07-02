@@ -10,6 +10,7 @@ from sales_analysis.models import SalesRecord
 from sales_analysis.services.aggregation import build_sales_report, get_unclassified_records
 from sales_analysis.services.excel_export import build_download_filename, export_report_excel
 from sales_analysis.services.import_service import get_stored_periods, process_upload
+from sales_analysis.services.pdf_export import export_report_pdf
 from sales_analysis.services.report_verification import verify_report
 
 
@@ -28,13 +29,22 @@ def _get_report_from_session(request) -> tuple | None:
     end_month = params["end_month"]
     period_label = params.get("period_label", "")
     simple = params.get("simple", False)
+    welfare = params.get("welfare", False)
+    final = params.get("final", False)
     qs = SalesRecord.objects.filter(
         year=year,
         month__gte=start_month,
         month__lte=end_month,
     )
     report = build_sales_report(
-        qs, year, start_month, end_month, period_label, simple=simple
+        qs,
+        year,
+        start_month,
+        end_month,
+        period_label,
+        simple=(simple or welfare) and not final,
+        welfare=welfare and not final,
+        final=final,
     )
     verification = verify_report(qs, report, year, start_month, end_month)
     return report, qs, verification
@@ -50,7 +60,7 @@ def _period_label_from_form(year: int, start_month: int, end_month: int, preset:
     return f"{year}년 {start_month}월~{end_month}월"
 
 
-def _generate_report_response(request, simple: bool = False):
+def _generate_report_response(request, simple: bool = False, welfare: bool = False, final: bool = False):
     form = ReportPeriodForm(request.POST)
     if not form.is_valid():
         return render(
@@ -73,7 +83,16 @@ def _generate_report_response(request, simple: bool = False):
             {"error": f"{period_label}에 해당하는 저장 데이터가 없습니다."},
         )
 
-    report = build_sales_report(qs, year, start_month, end_month, period_label, simple=simple)
+    report = build_sales_report(
+        qs,
+        year,
+        start_month,
+        end_month,
+        period_label,
+        simple=(simple or welfare) and not final,
+        welfare=welfare and not final,
+        final=final,
+    )
     verification = verify_report(qs, report, year, start_month, end_month)
     request.session["last_report_params"] = {
         "year": year,
@@ -81,6 +100,8 @@ def _generate_report_response(request, simple: bool = False):
         "end_month": end_month,
         "period_label": report.period_label,
         "simple": simple,
+        "welfare": welfare,
+        "final": final,
     }
     request.session["last_report_verification_passed"] = verification.passed
 
@@ -193,6 +214,16 @@ def generate_report(request):
 @require_POST
 def generate_simple_report(request):
     return _generate_report_response(request, simple=True)
+
+
+@require_POST
+def generate_welfare_report(request):
+    return _generate_report_response(request, welfare=True)
+
+
+@require_POST
+def generate_final_report(request):
+    return _generate_report_response(request, final=True)
 
 
 @require_GET

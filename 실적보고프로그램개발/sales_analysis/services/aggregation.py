@@ -1,5 +1,8 @@
 """
 매출 집계 및 보고서 피벗 생성
+
+Author: madmadosa-cloud
+License: MIT
 """
 
 from __future__ import annotations
@@ -12,10 +15,9 @@ from typing import Any
 from django.db.models import Count, Q, QuerySet, Sum
 
 from sales_analysis.constants import (
-    CUSTOMER_CATEGORIES,
-    CUSTOMER_CATEGORY_ORDER,
-    ITEM_CATEGORIES,
-    ITEM_CATEGORY_ORDER,
+    FINAL_CUSTOMER_ORDER,
+    FINAL_MAIN_MERGED_CODE,
+    FINAL_MAIN_MERGED_LABEL,
     SIMPLE_CUSTOMER_ORDER,
     SIMPLE_MERGED_CODE,
     SIMPLE_MERGED_LABEL,
@@ -23,6 +25,19 @@ from sales_analysis.constants import (
     UNCLASSIFIED_LABEL,
 )
 from sales_analysis.models import SalesRecord
+from sales_analysis.services.master_service import (
+    get_customer_category_map,
+    get_customer_category_order,
+    get_item_category_map,
+    get_item_category_order,
+    resolve_customer_category_name,
+    resolve_item_category_name,
+)
+from sales_analysis.services.welfare_service import (
+    get_welfare_group_labels,
+    get_welfare_group_order,
+    welfare_group_for_item,
+)
 
 
 @dataclass
@@ -76,19 +91,52 @@ class SalesReport:
     rows: list[ReportRow]
     unclassified_count: int = 0
     is_simple: bool = False
+    is_welfare: bool = False
+    is_final: bool = False
 
 
-def belongs_in_merged_group(cust_code: str, item_code: str) -> bool:
+def belongs_in_merged_group(
+    cust_code: str,
+    item_code: str,
+    customer_categories: dict[str, str] | None = None,
+    item_categories: dict[str, str] | None = None,
+) -> bool:
     """간편보고서 통합 구간(기타·생산시설·미분류) 여부"""
+    if customer_categories is None:
+        customer_categories = get_customer_category_map()
+    if item_categories is None:
+        item_categories = get_item_category_map()
     if cust_code in ("e", "z"):
         return True
-    if cust_code not in CUSTOMER_CATEGORIES:
+    if cust_code not in customer_categories:
         return True
-    if item_code not in ITEM_CATEGORIES:
+    if item_code not in item_categories:
         return True
     if cust_code not in STANDARD_CUSTOMER_CODES:
         return True
     return False
+
+
+def effective_final_customer_code(cust_code: str) -> str:
+    if cust_code in STANDARD_CUSTOMER_CODES:
+        return FINAL_MAIN_MERGED_CODE
+    return SIMPLE_MERGED_CODE
+
+
+def remap_bucket_for_final(
+    bucket: dict[tuple[str, str, int], MonthMetrics],
+) -> dict[tuple[str, str, int], MonthMetrics]:
+    merged: dict[tuple[str, str, int], MonthMetrics] = defaultdict(MonthMetrics)
+    for (cust, item, month), metrics in bucket.items():
+        new_cust = effective_final_customer_code(cust)
+        key = (new_cust, item, month)
+        prev = merged[key]
+        merged[key] = MonthMetrics(
+            count=prev.count + metrics.count,
+            quantity=prev.quantity + metrics.quantity,
+            amount_won=prev.amount_won + metrics.amount_won,
+        )
+    return dict(merged)
 
 
 def effective_customer_code(cust_code: str, item_code: str, simple: bool) -> str:
@@ -115,14 +163,43 @@ def remap_bucket_for_simple(
     return dict(merged)
 
 
-def _customer_order(simple: bool) -> list[str]:
-    return SIMPLE_CUSTOMER_ORDER if simple else CUSTOMER_CATEGORY_ORDER
+def remap_bucket_for_welfare(
+    bucket: dict[tuple[str, str, int], MonthMetrics],
+) -> dict[tuple[str, str, int], MonthMetrics]:
+    """품목분류코드를 복지부 출력항목으로 합산"""
+    merged: dict[tuple[str, str, int], MonthMetrics] = defaultdict(MonthMetrics)
+    for (cust, item, month), metrics in bucket.items():
+        welfare_code = welfare_group_for_item(item)
+        key = (cust, welfare_code, month)
+        prev = merged[key]
+        merged[key] = MonthMetrics(
+            count=prev.count + metrics.count,
+            quantity=prev.quantity + metrics.quantity,
+            amount_won=prev.amount_won + metrics.amount_won,
+        )
+    return dict(merged)
 
 
-def _customer_label(cust_code: str, simple: bool) -> str:
-    if simple and cust_code == SIMPLE_MERGED_CODE:
+def _customer_order(*, simple: bool, final: bool) -> list[str]:
+    if final:
+        return FINAL_CUSTOMER_ORDER
+    if simple:
+        return SIMPLE_CUSTOMER_ORDER
+    return get_customer_category_order()
+
+
+def _customer_label(
+    cust_code: str,
+    *,
+    simple: bool,
+    final: bool,
+    customer_categories: dict[str, str],
+) -> str:
+    if final and cust_code == FINAL_MAIN_MERGED_CODE:
+        return FINAL_MAIN_MERGED_LABEL
+    if (simple or final) and cust_code == SIMPLE_MERGED_CODE:
         return SIMPLE_MERGED_LABEL
-    return CUSTOMER_CATEGORIES.get(cust_code, UNCLASSIFIED_LABEL)
+    return customer_categories.get(cust_code, UNCLASSIFIED_LABEL)
 
 
 def get_period_blocks(start_month: int, end_month: int) -> list[PeriodBlock]:
@@ -217,13 +294,25 @@ def build_sales_report(
     end_month: int,
     period_label: str = "",
     simple: bool = False,
+    welfare: bool = False,
+    final: bool = False,
 ) -> SalesReport:
     months = list(range(start_month, end_month + 1))
     period_blocks = get_period_blocks(start_month, end_month)
     filtered = qs.filter(month__gte=start_month, month__lte=end_month)
     bucket = aggregate_from_queryset(filtered)
-    if simple:
+
+    use_simple_customers = (simple or welfare) and not final
+    if final:
+        bucket = remap_bucket_for_final(bucket)
+    elif use_simple_customers:
         bucket = remap_bucket_for_simple(bucket)
+    if welfare:
+        bucket = remap_bucket_for_welfare(bucket)
+
+    item_categories = get_item_category_map()
+    customer_categories = get_customer_category_map()
+    item_order = get_welfare_group_order() if welfare else get_item_category_order()
 
     unclassified_count = filtered.filter(
         Q(is_unclassified_item=True) | Q(is_unclassified_customer=True)
@@ -233,13 +322,21 @@ def build_sales_report(
     grand_month_cells: dict[int, ReportCell] = {m: _empty_cell() for m in months}
     all_item_cells_for_total: list[ReportCell] = []
 
-    for cust_code in _customer_order(simple):
-        cust_name = _customer_label(cust_code, simple)
+    for cust_code in _customer_order(simple=use_simple_customers, final=final):
+        cust_name = _customer_label(
+            cust_code,
+            simple=use_simple_customers,
+            final=final,
+            customer_categories=customer_categories,
+        )
         sub_month_cells: dict[int, ReportCell] = {m: _empty_cell() for m in months}
         section_rows: list[ReportRow] = []
 
-        for item_code in ITEM_CATEGORY_ORDER:
-            item_name = ITEM_CATEGORIES[item_code]
+        for item_code in item_order:
+            if welfare:
+                item_name = get_welfare_group_labels()[item_code]
+            else:
+                item_name = item_categories[item_code]
             month_cells: dict[int, ReportCell] = {}
             row_period_cells: list[ReportCell] = []
 
@@ -278,8 +375,10 @@ def build_sales_report(
         report_rows.append(subtotal_row)
         report_rows.extend(section_rows)
 
-    if not simple:
-        unclassified_rows = _build_unclassified_section(bucket, months, period_blocks)
+    if not use_simple_customers and not final:
+        unclassified_rows = _build_unclassified_section(
+            bucket, months, period_blocks, item_categories, customer_categories
+        )
         if unclassified_rows:
             report_rows.extend(unclassified_rows)
 
@@ -294,7 +393,11 @@ def build_sales_report(
     )
 
     label = period_label or _default_period_label(year, start_month, end_month)
-    if simple and "(간편)" not in label:
+    if welfare and "(복지부)" not in label:
+        label = f"{label} (복지부)"
+    elif final and "(최종)" not in label:
+        label = f"{label} (최종)"
+    elif simple and not welfare and "(간편)" not in label:
         label = f"{label} (간편)"
 
     return SalesReport(
@@ -306,7 +409,9 @@ def build_sales_report(
         period_blocks=period_blocks,
         rows=[total_row] + report_rows,
         unclassified_count=unclassified_count,
-        is_simple=simple,
+        is_simple=use_simple_customers,
+        is_welfare=welfare,
+        is_final=final,
     )
 
 
@@ -314,11 +419,13 @@ def _build_unclassified_section(
     bucket: dict[tuple[str, str, int], MonthMetrics],
     months: list[int],
     period_blocks: list[PeriodBlock],
+    item_categories: dict[str, str],
+    customer_categories: dict[str, str],
 ) -> list[ReportRow]:
     unclassified_keys = [
         k
         for k in bucket
-        if k[0] not in CUSTOMER_CATEGORIES or k[1] not in ITEM_CATEGORIES
+        if k[0] not in customer_categories or k[1] not in item_categories
     ]
     if not unclassified_keys:
         return []
@@ -328,8 +435,8 @@ def _build_unclassified_section(
     seen_combos = {(k[0], k[1]) for k in unclassified_keys}
 
     for cust_code, item_code in sorted(seen_combos):
-        cust_name = CUSTOMER_CATEGORIES.get(cust_code, UNCLASSIFIED_LABEL)
-        item_name = ITEM_CATEGORIES.get(item_code, UNCLASSIFIED_LABEL)
+        cust_name = customer_categories.get(cust_code, UNCLASSIFIED_LABEL)
+        item_name = item_categories.get(item_code, UNCLASSIFIED_LABEL)
         month_cells: dict[int, ReportCell] = {}
         row_period: list[ReportCell] = []
         for m in months:
@@ -385,9 +492,9 @@ def get_unclassified_records(qs: QuerySet[SalesRecord]) -> list[dict[str, Any]]:
             "월": r.month,
             "전표별": r.voucher_no,
             "품목코드": r.item_code,
-            "품목분류": r.item_category_name,
+            "품목분류": resolve_item_category_name(r.item_category_code),
             "거래처코드": r.customer_code,
-            "거래처분류": r.customer_category_name,
+            "거래처분류": resolve_customer_category_name(r.customer_category_code),
             "수량": r.quantity,
             "합계": int(r.total),
         }

@@ -33,9 +33,10 @@ def _cell_to_excel_values(cell) -> list:
 
 
 def _build_headers(report: SalesReport) -> list[str]:
+    item_header = "출력항목" if report.is_welfare else "품목분류"
     headers = [
         "판매처(거래처분류)",
-        "품목분류",
+        item_header,
         "납품실적(총계) 건수",
         "납품실적(총계) 수량",
         "납품실적(총계) 금액(천원)",
@@ -100,7 +101,7 @@ def export_report_excel(report: SalesReport, qs: QuerySet[SalesRecord]) -> bytes
         ws.column_dimensions[letter].width = 12 if col > 2 else 16
 
     unclassified = get_unclassified_records(qs)
-    if unclassified and not report.is_simple:
+    if unclassified and not report.is_simple and not report.is_welfare and not report.is_final:
         ws2 = wb.create_sheet("미분류")
         headers = list(unclassified[0].keys())
         ws2.append(headers)
@@ -130,6 +131,10 @@ def build_download_filename(report: SalesReport, ext: str) -> str:
         half = "하반기"
     else:
         half = f"{report.start_month}-{report.end_month}월"
-    if report.is_simple:
+    if report.is_welfare:
+        half = f"복지부_{half}"
+    elif report.is_final:
+        half = f"최종_{half}"
+    elif report.is_simple:
         half = f"간편_{half}"
     return f"매출분석_{report.year}년_{half}_{today}.{ext}"

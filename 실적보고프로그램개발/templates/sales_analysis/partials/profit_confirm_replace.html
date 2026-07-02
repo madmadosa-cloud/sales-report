@@ -1,0 +1,27 @@
+{% load sales_extras %}
+<div class="confirm-box">
+  <p><strong>이미 저장된 이익자료가 있습니다.</strong> 기존 자료를 삭제하고 새 자료로 교체하시겠습니까?</p>
+  {% if period_label %}
+  <p class="hint">새 조회기간: {{ period_label }}</p>
+  {% endif %}
+  <p class="hint">신규 업로드 {{ total_rows|comma }}행 대기 중</p>
+  {% if warnings %}
+  <ul class="hint">
+    {% for w in warnings %}<li>{{ w }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+  <div style="display:flex;gap:10px;margin-top:12px;">
+    {% csrf_token %}
+    <button
+      class="btn danger"
+      hx-post="{% url 'sales_analysis:profit_upload_confirm' %}"
+      hx-target="#profit-upload-status"
+      hx-swap="innerHTML"
+    >
+      기존 데이터 삭제 후 교체
+    </button>
+    <button type="button" class="btn secondary" onclick="document.getElementById('profit-upload-status').innerHTML=''">
+      취소
+    </button>
+  </div>
+</div>

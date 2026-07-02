@@ -1,0 +1,26 @@
+{% csrf_token %}
+<button
+  type="button"
+  class="btn"
+  hx-post="{% url 'sales_analysis:profit_report_generate' %}"
+  hx-target="#profit-report-preview"
+  hx-swap="innerHTML"
+  {% if not has_data %}disabled{% endif %}
+>보고서 생성</button>
+<button
+  type="button"
+  class="btn secondary"
+  hx-post="{% url 'sales_analysis:profit_report_generate_welfare' %}"
+  hx-target="#profit-report-preview"
+  hx-swap="innerHTML"
+  {% if not has_data %}disabled{% endif %}
+>복지부보고서</button>
+<button
+  type="button"
+  class="btn secondary"
+  hx-post="{% url 'sales_analysis:profit_report_generate_final' %}"
+  hx-target="#profit-report-preview"
+  hx-swap="innerHTML"
+  {% if not has_data %}disabled{% endif %}
+>최종보고서</button>
+<span class="hint">품목분류 · 복지부 출력항목 · 최종(거래처 2구간)</span>

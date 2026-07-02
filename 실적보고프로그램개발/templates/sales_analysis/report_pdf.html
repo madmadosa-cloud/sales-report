@@ -8,7 +8,7 @@
     {% if font_url %}
     @font-face { font-family: ReportFont; src: url('{{ font_url }}'); }
     {% endif %}
-    body { font-family: ReportFont, "Malgun Gothic", sans-serif; font-size: 6px; margin: 0; }
+    body { font-family: {% if font_name %}{{ font_name }}{% else %}ReportFont{% endif %}, "Malgun Gothic", sans-serif; font-size: 6px; margin: 0; }
     h1 { font-size: 14px; margin: 0 0 10px; }
     table { border-collapse: collapse; width: 100%; }
     th, td { border: 1px solid #999; padding: 2px 3px; text-align: right; }
@@ -24,7 +24,7 @@
     <thead>
       <tr>
         <th>판매처</th>
-        <th>품목분류</th>
+        <th>{% if report.is_welfare %}출력항목{% else %}품목분류{% endif %}</th>
         <th>총계 건수</th>
         <th>총계 수량</th>
         <th>총계 금액(천원)</th>

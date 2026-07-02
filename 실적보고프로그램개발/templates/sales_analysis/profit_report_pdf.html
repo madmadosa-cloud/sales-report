@@ -1,0 +1,92 @@
+{% load sales_extras %}
+
+<!DOCTYPE html>
+
+<html lang="ko">
+
+<head>
+
+  <meta charset="UTF-8">
+
+  <style>
+
+    @page { size: A4 landscape; margin: 12mm; }
+
+    {% if font_url %}
+
+    @font-face { font-family: ReportFont; src: url('{{ font_url }}'); }
+
+    {% endif %}
+
+    body { font-family: {% if font_name %}{{ font_name }}{% else %}ReportFont{% endif %}, "Malgun Gothic", sans-serif; font-size: 9px; margin: 0; }
+
+    h1 { font-size: 14px; margin: 0 0 10px; }
+
+    table { border-collapse: collapse; width: 100%; }
+
+    th, td { border: 1px solid #999; padding: 4px 6px; text-align: right; }
+
+    th { background: #eef1f9; text-align: center; }
+
+    td:first-child, td:nth-child(2), th:first-child, th:nth-child(2) { text-align: left; }
+
+    tr.total td { font-weight: bold; background: #fff7e6; }
+
+    tr.subtotal td { font-weight: bold; background: #f5f7fb; }
+
+  </style>
+
+</head>
+
+<body>
+
+  <h1>이익분석 보고서 ({{ report.period_label }})</h1>
+
+  <table>
+
+    <thead>
+
+      <tr>
+
+        <th>판매처(거래처분류)</th>
+
+        <th>{{ report.axis_label }}</th>
+
+        <th>수량</th>
+
+        <th>원가(천원)</th>
+
+        <th>이익금(천원)</th>
+
+      </tr>
+
+    </thead>
+
+    <tbody>
+
+      {% for row in report.rows %}
+
+      <tr class="{% if row.row_type == 'total' %}total{% elif row.row_type == 'subtotal' %}subtotal{% endif %}">
+
+        <td>{{ row.customer_label }}</td>
+
+        <td>{{ row.item_label }}</td>
+
+        <td>{{ row.quantity|comma_qty }}</td>
+
+        <td>{{ row.cost_thousand|comma }}</td>
+
+        <td>{{ row.amount_thousand|comma }}</td>
+
+      </tr>
+
+      {% endfor %}
+
+    </tbody>
+
+  </table>
+
+</body>
+
+</html>
+

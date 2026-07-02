@@ -9,16 +9,23 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from django.db.models import Count, Q, QuerySet, Sum
 
-from sales_analysis.constants import CUSTOMER_CATEGORIES, CUSTOMER_CATEGORY_ORDER, ITEM_CATEGORIES
+from sales_analysis.constants import FINAL_CUSTOMER_ORDER, SIMPLE_CUSTOMER_ORDER
 from sales_analysis.models import SalesRecord
+from sales_analysis.services.welfare_service import welfare_group_for_item
 from sales_analysis.services.aggregation import (
     ReportCell,
     SalesReport,
     aggregate_from_queryset,
     effective_customer_code,
+    effective_final_customer_code,
+    remap_bucket_for_final,
     remap_bucket_for_simple,
+    remap_bucket_for_welfare,
 )
-from sales_analysis.constants import SIMPLE_CUSTOMER_ORDER
+from sales_analysis.services.master_service import (
+    get_customer_category_order,
+    get_item_category_order,
+)
 
 
 @dataclass
@@ -72,6 +79,36 @@ def _remap_manual_for_simple(manual: dict[tuple[str, str, int], dict]) -> dict[t
     for (cust, item, month), m in manual.items():
         new_cust = effective_customer_code(cust, item, simple=True)
         key = (new_cust, item, month)
+        merged[key]["row_count"] += m["row_count"]
+        merged[key]["amount_won"] += m["amount_won"]
+        merged[key]["quantity_sum"] += m["quantity_sum"]
+    return dict(merged)
+
+
+def _remap_manual_for_final(manual: dict[tuple[str, str, int], dict]) -> dict[tuple[str, str, int], dict]:
+    from collections import defaultdict
+
+    merged: dict[tuple[str, str, int], dict] = defaultdict(
+        lambda: {"row_count": 0, "amount_won": Decimal(0), "quantity_sum": Decimal(0)}
+    )
+    for (cust, item, month), m in manual.items():
+        new_cust = effective_final_customer_code(cust)
+        key = (new_cust, item, month)
+        merged[key]["row_count"] += m["row_count"]
+        merged[key]["amount_won"] += m["amount_won"]
+        merged[key]["quantity_sum"] += m["quantity_sum"]
+    return dict(merged)
+
+
+def _remap_manual_for_welfare(manual: dict[tuple[str, str, int], dict]) -> dict[tuple[str, str, int], dict]:
+    from collections import defaultdict
+
+    merged: dict[tuple[str, str, int], dict] = defaultdict(
+        lambda: {"row_count": 0, "amount_won": Decimal(0), "quantity_sum": Decimal(0)}
+    )
+    for (cust, item, month), m in manual.items():
+        welfare_code = welfare_group_for_item(item)
+        key = (cust, welfare_code, month)
         merged[key]["row_count"] += m["row_count"]
         merged[key]["amount_won"] += m["amount_won"]
         merged[key]["quantity_sum"] += m["quantity_sum"]
@@ -146,9 +183,15 @@ def verify_report(
 
     manual = _manual_group_counts(period_qs)
     service = aggregate_from_queryset(period_qs)
-    if report.is_simple:
+    if report.is_final:
+        manual = _remap_manual_for_final(manual)
+        service = remap_bucket_for_final(service)
+    elif report.is_simple or report.is_welfare:
         manual = _remap_manual_for_simple(manual)
         service = remap_bucket_for_simple(service)
+    if report.is_welfare:
+        manual = _remap_manual_for_welfare(manual)
+        service = remap_bucket_for_welfare(service)
 
     # 3) 그룹별 행 수 = 집계 서비스
     service_count_ok = True
@@ -280,7 +323,13 @@ def verify_report(
     )
 
     # 6) 총계 = 거래처 품목 합
-    customer_codes = SIMPLE_CUSTOMER_ORDER if report.is_simple else CUSTOMER_CATEGORY_ORDER
+    customer_codes = (
+        FINAL_CUSTOMER_ORDER
+        if report.is_final
+        else SIMPLE_CUSTOMER_ORDER
+        if (report.is_simple or report.is_welfare)
+        else get_customer_category_order()
+    )
     item_rows_std = [
         r
         for r in report.rows
@@ -293,7 +342,17 @@ def verify_report(
             f"총계 건수 불일치: 품목합={grand_from_items} 총계행={result.report_grand_count}"
         )
 
-    if report.is_simple:
+    if report.is_welfare:
+        count_detail = (
+            f"총계 {result.report_grand_count:,}건 "
+            f"(복지부 출력항목·간편 거래처 통합)"
+        )
+    elif report.is_final:
+        count_detail = (
+            f"총계 {result.report_grand_count:,}건 "
+            f"(최종: a~d 통합 / 기타·생산시설·미분류)"
+        )
+    elif report.is_simple:
         count_detail = (
             f"총계 {result.report_grand_count:,}건 "
             f"(간편: 기타·생산시설·미분류 통합 포함)"
@@ -328,12 +387,12 @@ def verify_report(
         )
 
     db_total = period_qs.aggregate(s=Sum("total"))["s"] or Decimal(0)
-    if report.is_simple:
+    if report.is_simple or report.is_welfare or report.is_final:
         std_total = db_total
     else:
         std_qs = period_qs.filter(
-            customer_category_code__in=CUSTOMER_CATEGORIES,
-            item_category_code__in=ITEM_CATEGORIES,
+            customer_category_code__in=get_customer_category_order(),
+            item_category_code__in=get_item_category_order(),
         )
         std_total = std_qs.aggregate(s=Sum("total"))["s"] or Decimal(0)
     db_std_thousand = _amount_to_thousand(std_total)
@@ -361,7 +420,17 @@ def verify_report(
 
     # 8) 미분류 안내
     if result.unclassified_row_count:
-        if report.is_simple:
+        if report.is_welfare:
+            warnings.append(
+                f"미분류 원자료 {result.unclassified_row_count:,}건 - "
+                "복지부보고서 「기타·생산시설·미분류」 구간 및 기타 출력항목에 포함됩니다."
+            )
+        elif report.is_final:
+            warnings.append(
+                f"미분류 원자료 {result.unclassified_row_count:,}건 - "
+                "최종보고서 「기타·생산시설·미분류」 구간에 포함됩니다."
+            )
+        elif report.is_simple:
             warnings.append(
                 f"미분류 원자료 {result.unclassified_row_count:,}건 - "
                 "간편보고서 「기타·생산시설·미분류」 구간에 포함되어 있습니다."

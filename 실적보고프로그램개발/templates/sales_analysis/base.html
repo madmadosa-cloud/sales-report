@@ -6,12 +6,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}매출 분석{% endblock %}</title>
   <link rel="stylesheet" href="{% static 'sales_analysis/css/main.css' %}">
-  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <script src="{% static 'sales_analysis/js/htmx.min.js' %}"></script>
 </head>
 <body>
   <header class="app-header">
     <h1>매출 분석 프로그램</h1>
     <p>품목분류별 · 거래처분류별 · 월별 매출 집계 및 보고서 생성</p>
+    <nav class="app-nav">
+      <a href="{% url 'sales_analysis:index' %}">홈</a>
+      <a href="{% url 'sales_analysis:profit_index' %}">이익분석</a>
+      <a href="{% url 'sales_analysis:category_master' %}">분류코드 관리</a>
+      <a href="{% url 'sales_analysis:welfare_category_master' %}">복지부 분류코드 관리</a>
+    </nav>
   </header>
   <main>
     {% if messages %}
@@ -23,6 +29,9 @@
     {% endif %}
     {% block content %}{% endblock %}
   </main>
+  <footer class="app-footer">
+    v{{ app_version }} · Made by {{ app_author }} · {{ app_license }}
+  </footer>
   {% block extra_js %}{% endblock %}
   <script>
   document.body.addEventListener('htmx:configRequest', function(event) {

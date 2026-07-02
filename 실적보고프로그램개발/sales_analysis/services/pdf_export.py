@@ -1,9 +1,10 @@
 """
-PDF 보고서 출력 (WeasyPrint)
+PDF 보고서 출력 (xhtml2pdf — exe 패키징에 적합한 순수 Python 기반)
 """
 
 from __future__ import annotations
 
+from io import BytesIO
 from pathlib import Path
 
 from django.conf import settings
@@ -33,8 +34,21 @@ def resolve_korean_font_path() -> Path | None:
     return None
 
 
+def _register_pdf_font(font_path: Path | None) -> str:
+    if not font_path:
+        return "Helvetica"
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    font_name = "ReportFont"
+    if font_name not in pdfmetrics.getRegisteredFontNames():
+        pdfmetrics.registerFont(TTFont(font_name, str(font_path)))
+    return font_name
+
+
 def export_report_pdf(report: SalesReport) -> bytes:
     font_path = resolve_korean_font_path()
+    font_name = _register_pdf_font(font_path)
     font_url = font_path.as_uri() if font_path else ""
 
     html = render_to_string(
@@ -42,9 +56,14 @@ def export_report_pdf(report: SalesReport) -> bytes:
         {
             "report": report,
             "font_url": font_url,
+            "font_name": font_name,
         },
     )
 
-    from weasyprint import HTML
+    from xhtml2pdf import pisa
 
-    return HTML(string=html).write_pdf()
+    result = BytesIO()
+    status = pisa.CreatePDF(html, dest=result, encoding="utf-8")
+    if status.err:
+        raise RuntimeError("PDF 생성 중 오류가 발생했습니다.")
+    return result.getvalue()

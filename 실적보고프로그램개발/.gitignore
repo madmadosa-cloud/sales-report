@@ -1,11 +1,48 @@
+# Python
 __pycache__/
 *.py[cod]
+*.pyo
+*.pyd
+.Python
 .venv/
+venv/
+env/
+
+# Django / local data
 db.sqlite3
+db.sqlite3-journal
 staticfiles/
 media/
+
+# Secrets & environment
+.env
+.env.*
+!.env.example
+
+# Generated reports & exports (may contain facility data)
 *.xlsx
+*.xls
 *.pdf
+
+# PyInstaller build output
+build/
+dist/
+*.spec.bak
+
+# Packaged app local data (when testing dist folder)
+.django_secret
+
+# Debug / verification output
 *_out.txt
 verify_out.txt
 detail_out.txt
+*.log
+logs/
+
+# OS / editor
+Thumbs.db
+desktop.ini
+.DS_Store
+*.tmp
+.idea/
+.vscode/

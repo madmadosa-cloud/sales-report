@@ -1,0 +1,96 @@
+{% load sales_extras %}
+
+{% if error %}
+
+<div class="status-box error">{{ error }}</div>
+
+{% else %}
+
+<div class="report-head">
+
+  <h3>이익분석 보고서 ({{ report.period_label }}){% if report.is_welfare %} <span class="report-badge-simple">복지부</span>{% elif report.is_final %} <span class="report-badge-simple">최종</span>{% endif %}</h3>
+
+  {% if report.is_welfare %}
+
+  <p class="hint">거래처분류·복지부 출력항목별 원가·이익금(천원) 집계입니다.</p>
+
+  {% elif report.is_final %}
+
+  <p class="hint">거래처를 「지방자치단체+교육기관+국가기관+공공기관」 / 「기타·생산시설·미분류」 2구간으로 합산합니다.</p>
+
+  {% else %}
+
+  <p class="hint">거래처분류·품목분류별 이익금(천원) 집계입니다. 월별 구분 없이 업로드 자료 전체를 합산합니다.</p>
+
+  {% endif %}
+
+  {% if report.unclassified_count %}
+
+  <p class="hint">미분류 품목·거래처 {{ report.unclassified_count|comma }}건</p>
+
+  {% endif %}
+
+</div>
+
+
+
+<div class="report-actions">
+
+  <a href="{% url 'sales_analysis:profit_download_excel' %}" class="btn secondary">Excel (.xlsx) 다운로드</a>
+
+  <a href="{% url 'sales_analysis:profit_download_pdf' %}" class="btn secondary">PDF 다운로드</a>
+
+</div>
+
+
+
+<div class="tablewrap">
+
+  <table class="report-table profit-table">
+
+    <thead>
+
+      <tr>
+
+        <th>판매처(거래처분류)</th>
+
+        <th>{{ report.axis_label }}</th>
+
+        <th>수량</th>
+
+        <th>원가(천원)</th>
+
+        <th>이익금(천원)</th>
+
+      </tr>
+
+    </thead>
+
+    <tbody>
+
+      {% for row in report.rows %}
+
+      <tr class="{% if row.row_type == 'total' %}row-total{% elif row.row_type == 'subtotal' %}row-subtotal{% endif %}">
+
+        <td>{{ row.customer_label }}</td>
+
+        <td>{{ row.item_label }}</td>
+
+        <td>{{ row.quantity|comma_qty }}</td>
+
+        <td>{{ row.cost_thousand|comma }}</td>
+
+        <td>{{ row.amount_thousand|comma }}</td>
+
+      </tr>
+
+      {% endfor %}
+
+    </tbody>
+
+  </table>
+
+</div>
+
+{% endif %}
+

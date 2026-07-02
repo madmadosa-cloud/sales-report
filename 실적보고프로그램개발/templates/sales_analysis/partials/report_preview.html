@@ -14,8 +14,12 @@
 
 <div class="report-head">
 
-  <h3>{{ report.period_label }} 매출분석{% if report.is_simple %} <span class="report-badge-simple">간편</span>{% endif %}</h3>
-  {% if report.is_simple %}
+  <h3>{{ report.period_label }} 매출분석{% if report.is_welfare %} <span class="report-badge-simple">복지부</span>{% elif report.is_final %} <span class="report-badge-simple">최종</span>{% elif report.is_simple %} <span class="report-badge-simple">간편</span>{% endif %}</h3>
+  {% if report.is_welfare %}
+  <p class="hint">복지부 출력항목별로 품목코드를 합산하고, 거래처는 간편보고서와 같이 통합합니다.</p>
+  {% elif report.is_final %}
+  <p class="hint">거래처를 「지방자치단체+교육기관+국가기관+공공기관」과 「기타·생산시설·미분류」 2구간으로 통합합니다.</p>
+  {% elif report.is_simple %}
   <p class="hint">기타·생산시설·미분류를 하나의 판매처 구간으로 통합하여 표시합니다.</p>
   {% elif report.unclassified_count %}
 
@@ -63,7 +67,7 @@
 
         <th>판매처(거래처분류)</th>
 
-        <th>품목분류</th>
+        <th>{% if report.is_welfare %}출력항목{% else %}품목분류{% endif %}</th>
 
         <th>납품실적(총계) 건수</th>
 

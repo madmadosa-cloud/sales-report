@@ -1,0 +1,18 @@
+<div class="confirm-box">
+  <h4>삭제 불가 — 사용 중인 코드</h4>
+  <p>{{ error }}</p>
+  <p>코드 <strong>{{ code }}</strong>는 현재 <strong>{{ usage_count|default:0 }}건</strong>의 매출 데이터에서 사용 중입니다.</p>
+  <p class="hint">강제 삭제하면 해당 데이터는 미분류로 표시됩니다. 다른 코드로 재매핑하려면 데이터를 먼저 정리하세요.</p>
+  <form
+    hx-post="{% if kind == 'item' %}{% url 'sales_analysis:item_category_delete' code %}{% else %}{% url 'sales_analysis:customer_category_delete' code %}{% endif %}"
+    hx-target="{% if kind == 'item' %}#item-panel{% else %}#customer-panel{% endif %}"
+    hx-swap="innerHTML"
+    style="display:flex; gap:8px; flex-wrap:wrap;"
+  >
+    {% csrf_token %}
+    <input type="hidden" name="force" value="1">
+    <button type="submit" class="btn danger">강제 삭제 (미분류 처리)</button>
+    <button type="button" class="btn secondary" onclick="document.getElementById('master-status').innerHTML=''">취소</button>
+  </form>
+</div>
+
