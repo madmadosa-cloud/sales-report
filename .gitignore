@@ -4,6 +4,8 @@
 dist/
 build/
 *.spec
+__pycache__/
+*.pyc
 
 # ===== App session / saved analysis data =====
 저장데이터/

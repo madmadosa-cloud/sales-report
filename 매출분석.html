@@ -1,22 +1,23 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="EUC-KR">
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>���� �м� ���α׷�</title>
+<title>매출 분석 프로그램</title>
 <style>
   :root{
     --blue:#2f57c4; --blue-d:#23459c; --bg:#f4f6fb; --line:#e2e6ef;
     --txt:#1f2733; --muted:#6b7585; --ok:#1a7f4b;
   }
   *{box-sizing:border-box;}
-  body{margin:0;font-family:"���� ����","Malgun Gothic",system-ui,sans-serif;
+  body{margin:0;font-family:"맑은 고딕","Malgun Gothic",system-ui,sans-serif;
        background:var(--bg);color:var(--txt);}
   header{background:linear-gradient(135deg,var(--blue),var(--blue-d));color:#fff;
          padding:22px 28px;}
   header h1{margin:0;font-size:22px;}
   header p{margin:6px 0 0;opacity:.9;font-size:13px;}
   main{max-width:1080px;margin:0 auto;padding:22px;}
+  main.wide-results{max-width:min(98vw,1680px);}
   .card{background:#fff;border:1px solid var(--line);border-radius:12px;
         padding:20px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
   .card h2{margin:0 0 4px;font-size:16px;}
@@ -54,99 +55,703 @@
   td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;}
   tr.total td{font-weight:bold;background:#fff7e6;}
   tr:nth-child(even):not(.total) td{background:#fbfcfe;}
-  .tablewrap{overflow:auto;max-height:460px;border-radius:8px;}
+  .tablewrap{overflow:visible;max-height:none;border-radius:8px;}
+  .tablewrap.pivot-view{max-height:none;border:1px solid var(--line);overflow:visible;}
+  .tablewrap.pivot-view table.pivot-table{width:100%;min-width:0;font-size:11px;table-layout:auto;}
+  .tablewrap.pivot-view .pivot-table th,.tablewrap.pivot-view .pivot-table td{padding:6px 8px;}
+  .tablewrap.pivot-view .pivot-table th.firstcol,.tablewrap.pivot-view .pivot-table td.firstcol{
+    min-width:140px;max-width:280px;white-space:normal;word-break:keep-all;line-height:1.35;
+    vertical-align:middle;box-shadow:4px 0 10px -4px rgba(31,39,51,.12);z-index:2;}
+  .tablewrap.pivot-view .pivot-table th.firstcol{z-index:3;background:#e4e9f6;}
+  .tablewrap.pivot-view .pivot-table th.month-col,.tablewrap.pivot-view .pivot-table td.month-col{
+    min-width:52px;white-space:nowrap;text-align:right;}
+  .tablewrap.pivot-view .pivot-table th.month-col{text-align:center;padding:6px 4px;}
+  .tablewrap.pivot-view .pivot-table td.month-col.empty{color:#c5cad4;}
+  .tablewrap.pivot-view .pivot-table th.col-sum,.tablewrap.pivot-view .pivot-table td.col-sum{
+    min-width:96px;font-weight:bold;background:#eef2ff !important;position:sticky;right:0;z-index:2;
+    box-shadow:-4px 0 10px -4px rgba(31,39,51,.12);}
+  .tablewrap.pivot-view .pivot-table tr.total td.col-sum{background:#fff3db !important;}
+  .tablewrap.pivot-view .pivot-table tbody tr:nth-child(even):not(.total) td.month-col{background:#f6f8fc;}
+  .tablewrap.pivot-view .pivot-table tbody tr:hover td{background:#edf2ff;}
+  .tablewrap.pivot-view .pivot-table tbody tr:hover td.firstcol{background:#fff;}
+  .tablewrap.pivot-view .pivot-table tbody tr:hover td.col-sum{background:#e4ebff !important;}
+  .pivot-hint{font-size:12px;color:var(--muted);margin:0 0 10px;}
   .tabbtns{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;}
   .tabbtns button{padding:8px 14px;border:1px solid var(--line);background:#fff;
-                  border-radius:20px;cursor:pointer;font-size:13px;}
+                  border-radius:20px;cursor:pointer;font-size:13px;line-height:1.35;max-width:220px;}
   .tabbtns button.active{background:var(--blue);color:#fff;border-color:var(--blue);}
   .hide{display:none;}
   .hint{color:var(--muted);font-size:12px;margin-top:10px;}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;}
+  .chip{display:inline-flex;align-items:center;border:1px solid var(--line);
+        border-radius:20px;overflow:hidden;background:#fff;}
+  .chip.active{border-color:var(--blue);box-shadow:0 0 0 2px rgba(47,87,196,.15);}
+  .chip-label{border:0;background:transparent;cursor:pointer;font-size:13px;
+              font-weight:bold;color:var(--txt);padding:8px 6px 8px 14px;}
+  .chip.active .chip-label{color:var(--blue);}
+  .chip-del{border:0;background:transparent;cursor:pointer;color:var(--muted);
+            font-size:15px;line-height:1;padding:8px 12px 8px 4px;}
+  .chip-del:hover{color:#c0392b;}
+  .muted{color:var(--muted);font-size:13px;}
+  .master-grid{display:grid;grid-template-columns:1fr;gap:20px;}
+  @media (min-width:1100px){.master-grid{grid-template-columns:1fr 1fr;}}
+  table.master-table{width:100%;border-collapse:collapse;font-size:13px;}
+  table.master-table th,table.master-table td{border:1px solid var(--line);padding:8px 10px;text-align:left;}
+  table.master-table th{background:#eef1f9;}
+  table.master-table .col-code{width:48px;text-align:center;}
+  table.master-table .col-use{width:52px;text-align:center;}
+  table.master-table .col-count{width:96px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}
+  table.master-table .col-actions{white-space:nowrap;}
+  table.master-table .name-input{width:100%;min-width:100px;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:13px;}
+  table.master-table tr.inactive-row td{color:var(--muted);background:#fafafa;}
+  .master-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;align-items:end;margin-bottom:14px;}
+  .master-form label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:bold;}
+  .master-form input[type="text"]{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;}
+  .master-upload-form{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);}
+  .master-upload-form h4{margin:0 0 8px;font-size:14px;}
+  .master-upload-form label{display:block;margin-bottom:8px;font-size:12px;}
+  .master-upload-form .mode-options label{display:flex;gap:8px;align-items:flex-start;font-weight:normal;margin-bottom:6px;}
+  .btn.small{padding:6px 10px;font-size:12px;}
+  .btn.danger{background:#fff;color:#c0392b;border:1px solid #e8b4b4;}
+  .btn.danger:hover{background:#fdecea;}
+  .category-panel h3{margin:0 0 4px;font-size:15px;}
+  .savebar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+           background:#fff;border:1px solid var(--line);border-radius:12px;
+           padding:12px 16px;margin-bottom:14px;}
+  .savebar label{font-weight:bold;font-size:14px;}
+  .savebar input[type=month]{border:1px solid var(--line);border-radius:8px;
+           padding:7px 10px;font-size:14px;font-family:inherit;}
+  .savebar .vlabel{color:var(--muted);font-size:13px;margin-left:auto;}
+  .savebar .btn{padding:9px 16px;font-size:13px;}
+  .monthpicker{margin-bottom:4px;}
+  .monthpicker-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .monthpicker-row label{font-weight:bold;font-size:14px;color:var(--txt);}
+  .monthpicker .btn{padding:9px 16px;font-size:13px;}
+  .monthpicker .btn.load-month{background:var(--blue);color:#fff;border:0;}
+  .monthpicker .btn.annual-view,.monthpicker .btn.xls-dl{background:#fff;color:var(--blue);border:1px solid var(--blue);}
+  .monthpicker .btn.xls-dl:disabled{opacity:.45;cursor:not-allowed;}
+  .monthpicker .del-month{border:1px solid var(--line);background:#fff;color:#c0392b;
+           cursor:pointer;font-size:13px;padding:8px 12px;border-radius:8px;}
+  .monthpicker .del-month:hover{background:#fbeaea;}
+  .monthpicker .count{color:var(--muted);font-size:12px;margin-left:4px;}
+  .reportbar{display:flex;flex-direction:column;gap:14px;}
+  .report-period{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+                 padding:12px 14px;background:#f6f8ff;border:1px solid #d9e1f7;border-radius:10px;}
+  .report-period .rp-title{font-weight:bold;font-size:14px;min-width:72px;color:var(--blue);}
+  .report-period input[type=number]{border:1px solid var(--line);border-radius:8px;padding:8px 10px;
+           width:72px;font-size:14px;font-family:inherit;}
+  .report-period input.rpt-month{width:56px;}
+  .yearsel{border:1px solid var(--line);border-radius:8px;padding:7px 10px;
+           font-size:14px;font-family:inherit;background:#fff;}
+  .brandrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+  .brandrow input{border:1px solid var(--line);border-radius:8px;padding:9px 12px;
+           font-size:14px;font-family:inherit;min-width:220px;}
+  .brandrow .btn{padding:9px 16px;font-size:13px;}
+  th.firstcol,td.firstcol{position:sticky;left:0;background:#eef1f9;z-index:1;}
+  td.firstcol{background:#fff;font-weight:bold;}
+  tr.region-gn td{background:#cfe0ff !important;}
+  tr.region-out td{background:#ffdcc2 !important;}
+  tr.region-gn td.firstcol{background:#b6cffb !important;}
+  tr.region-out td.firstcol{background:#ffcaa3 !important;}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px;font-size:12px;color:var(--txt);}
+  .legend-item{display:inline-flex;align-items:center;gap:6px;}
+  .legend-box{width:14px;height:14px;border-radius:3px;border:1px solid var(--line);display:inline-block;}
+  .legend-box.region-gn{background:#b6cffb;}
+  .legend-box.region-out{background:#ffcaa3;}
+  .report-actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;}
+  .report-head h2{margin:0 0 4px;font-size:22px;}
+  .report-head .meta{color:var(--muted);font-size:13px;margin-bottom:6px;}
+  .report-sec{margin:26px 0;}
+  .report-sec h3{font-size:17px;margin:0 0 6px;padding-bottom:6px;border-bottom:2px solid var(--blue);}
+  .report-comment{background:#f6f8ff;border:1px solid #d9e1f7;border-radius:8px;
+                  padding:12px 14px;font-size:13px;line-height:1.7;margin:10px 0 14px;}
+  .report-comment p::before{
+    content:"";display:inline-block;width:7px;height:7px;
+    border:1.5px solid var(--blue);background:var(--blue);
+    margin-right:7px;vertical-align:2px;flex-shrink:0;
+  }
+  .report-increase p::before{border-color:#1a7f4b;background:#1a7f4b;}
+  .report-decline p::before{border-color:#c0392b;background:#c0392b;}
+  .report-decline{background:#fff8f8;border-color:#f0c8c8;}
+  .report-decline h4{margin:0 0 8px;font-size:14px;color:#c0392b;}
+  .report-increase{background:#f4fbf6;border-color:#b8dfc4;}
+  .report-increase h4{margin:0 0 8px;font-size:14px;color:#1a7f4b;}
+  .report-decline .tablewrap,.report-increase .tablewrap{margin-top:8px;max-height:none;}
+  .chartbox{border:1px solid var(--line);border-radius:10px;padding:12px;margin:10px 0;background:#fff;}
+  .chartbox .ctitle{font-size:13px;font-weight:bold;margin-bottom:6px;}
+  .chart-datatable{margin-bottom:10px;}
+  .chart-datatable .tablewrap{max-height:none;overflow:visible;border:0;}
+  .chart-datatable table{font-size:12px;}
+  .chart-datatable th,.chart-datatable td{padding:5px 8px;}
+  svg.chart{width:100%;height:auto;display:block;max-width:100%;}
+  .chart-scroll{overflow:visible;max-width:100%;width:100%;}
+  .chart-scroll > div{width:100% !important;max-width:100%;}
+  .chart-scroll svg.chart{display:block;height:auto;width:100%;max-width:100%;}
+  #report .tablewrap,#results .tablewrap{max-height:none;overflow:visible;}
+  svg.chart text.ct{font-size:11px;fill:#6b7585;}
+  svg.chart text.cat-label{fill:#4a5568;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .pos{color:#1a7f4b;} .neg{color:#c0392b;}
+  @media (max-width:760px){ .grid2{grid-template-columns:1fr;} }
+  .app-nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;padding:6px;
+    background:#fff;border:1px solid var(--line);border-radius:12px;
+    box-shadow:0 1px 3px rgba(0,0,0,.04);}
+  .app-nav-btn{flex:1;min-width:220px;border:0;background:transparent;color:var(--txt);
+    padding:14px 18px;font-size:15px;font-weight:bold;border-radius:8px;cursor:pointer;
+    text-align:left;line-height:1.35;}
+  .app-nav-btn:hover{background:#f3f6ff;}
+  .app-nav-btn.active{background:var(--blue);color:#fff;box-shadow:0 2px 8px rgba(47,87,196,.25);}
+  .app-nav-btn.nav-license{flex:0 1 auto;min-width:0;font-size:12px;color:var(--muted);}
+  .app-nav-btn.nav-license.active{color:#fff;}
+  .license-page{font-size:13px;line-height:1.75;color:var(--txt);}
+  .license-page h2{margin:0 0 6px;font-size:18px;}
+  .license-page h3{margin:22px 0 8px;font-size:15px;color:var(--blue);}
+  .license-page .ver{color:var(--muted);font-size:12px;margin:0 0 14px;}
+  .license-page .notice{background:#f6f8ff;border:1px solid #d9e1f7;border-radius:8px;
+    padding:12px 14px;font-size:12px;color:var(--muted);margin-bottom:18px;}
+  .license-page table{border-collapse:collapse;width:100%;font-size:12px;margin:10px 0 16px;}
+  .license-page th,.license-page td{border:1px solid var(--line);padding:8px 10px;text-align:left;}
+  .license-page th{background:#eef1f9;}
+  .license-page ul{margin:8px 0;padding-left:20px;}
+  .license-page a{color:var(--blue);}
+  .app-footer{margin-top:8px;padding:20px 0 28px;text-align:center;
+    font-size:12px;color:var(--muted);border-top:1px solid var(--line);}
+  .app-footer strong{color:var(--txt);font-weight:bold;}
+  .app-page{display:block;}
+  .app-page.hide{display:none !important;}
+  /* 인쇄 레이아웃 규칙
+     1. 페이지 여백 최소·내용으로 채움  2. 분석 구간은 페이지 상단 시작
+     3. 축소 시 그래프 우선  4. 블록 중간 절단 방지
+     5. 표·그래프·코멘트별 글자 통일  6. 겹침 시 글자 축소(preparePrintLayout) */
+  body.print-report header,body.print-report .app-nav,body.print-report .app-footer,
+  body.print-report #pageData,body.print-report #results,body.print-report .no-print{
+    display:none !important;
+  }
+  body.print-report main{max-width:none;padding:0;margin:0;}
+  body.print-report #pageReport,body.print-report #report{display:block !important;}
+  body.print-report #pageReport.hide,body.print-report #report.hide{display:block !important;}
+  body.print-report #report{
+    --prt-title:13px;--prt-meta:8px;
+    --prt-h3:11px;--prt-h4:10px;
+    --prt-kpi-k:8px;--prt-kpi-v:11px;
+    --prt-comment:10px;--prt-comment-lh:1.45;--prt-comment-gap:3px;
+    --prt-table:9px;--prt-table-lh:1.35;--prt-table-pad:2px 4px;
+    --prt-chart-title:9px;--prt-legend:8px;
+    --prt-gap:3px;
+  }
+  body.print-report #report .report-card{border:0;box-shadow:none;padding:0;margin:0;}
+  body.print-report #report .print-page{
+    page-break-after:always;break-after:page;
+    page-break-inside:auto;break-inside:auto;
+    width:186mm;max-width:186mm;margin:0 auto;padding:0;
+    box-sizing:border-box;
+  }
+  body.print-report #report .print-page-fit{
+    page-break-inside:auto;break-inside:auto;
+  }
+  body.print-report #report .print-page:last-child{
+    page-break-after:auto;break-after:auto;
+  }
+  body.print-report #report .print-sec-start{
+    page-break-before:always;break-before:page;
+  }
+  body.print-report #report .chartbox,
+  body.print-report #report .report-comment,
+  body.print-report #report .report-increase,
+  body.print-report #report .report-decline{
+    page-break-inside:avoid;break-inside:avoid;
+  }
+  body.print-report #report .report-head{margin:0 0 3px;}
+  body.print-report #report .report-head h2{
+    font-size:var(--prt-title);margin:0 0 2px;line-height:1.3;letter-spacing:0;
+  }
+  body.print-report #report .report-head .meta{
+    font-size:var(--prt-meta);line-height:1.35;margin:0;letter-spacing:0;
+  }
+  body.print-report #report .summary{
+    display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin:0 0 4px;
+  }
+  body.print-report #report .kpi{
+    min-width:0;padding:4px 6px;page-break-inside:avoid;
+  }
+  body.print-report #report .kpi .k{font-size:var(--prt-kpi-k);line-height:1.35;}
+  body.print-report #report .kpi .v{
+    font-size:var(--prt-kpi-v);margin-top:1px;line-height:1.25;
+  }
+  body.print-report #report .report-sec{margin:0;}
+  body.print-report #report .report-sec h3{
+    font-size:var(--prt-h3);margin:0 0 3px;padding-bottom:2px;
+    line-height:1.3;letter-spacing:0;
+    border-bottom:1px solid var(--blue);
+  }
+  body.print-report #report .report-sec h4,
+  body.print-report #report .report-sec h4[style]{
+    font-size:var(--prt-h4) !important;margin:0 0 3px !important;
+    line-height:1.3 !important;letter-spacing:0;
+  }
+  body.print-report #report .report-comment{
+    font-size:var(--prt-comment);line-height:var(--prt-comment-lh);
+    letter-spacing:-0.01em;
+    padding:4px 6px;margin:2px 0 4px;
+  }
+  body.print-report #report .report-comment p{
+    margin:0 0 var(--prt-comment-gap) !important;
+  }
+  body.print-report #report .report-comment p:last-child{margin-bottom:0 !important;}
+  body.print-report #report .report-comment p::before{
+    width:6px;height:6px;margin-right:6px;vertical-align:1px;
+  }
+  body.print-report #report .print-page-comment-lg{
+    --prt-comment:11px;--prt-comment-lh:1.55;--prt-comment-gap:4px;
+  }
+  body.print-report #report .print-page-comment-lg .report-comment{
+    padding:6px 8px;margin:3px 0 5px;
+  }
+  body.print-report #report .print-page-comment-lg .report-comment p::before{
+    width:7px;height:7px;margin-right:7px;vertical-align:2px;
+  }
+  body.print-report #report .print-page1-comment{
+    --prt-comment:12px;--prt-comment-lh:1.58;--prt-comment-gap:5px;
+  }
+  body.print-report #report .print-page1-comment .report-comment{
+    padding:7px 9px;margin:4px 0 6px;
+  }
+  body.print-report #report .print-page1-comment .report-comment p::before{
+    width:7px;height:7px;margin-right:7px;vertical-align:2px;
+  }
+  body.print-report #report .print-lead-keep-table{
+    page-break-inside:avoid;break-inside:avoid;
+  }
+  body.print-report #report .print-lead-chart-first{
+    page-break-inside:auto;break-inside:auto;
+  }
+  body.print-report #report .print-lead-chart-first .tablewrap{
+    page-break-before:auto;break-before:auto;
+  }
+  body.print-report #report .print-charts-v{
+    display:grid;grid-template-columns:1fr;gap:var(--prt-gap);
+  }
+  body.print-report #report .grid2{grid-template-columns:1fr;gap:var(--prt-gap);}
+  body.print-report #report .chartbox{
+    padding:3px 4px;margin:0;max-width:100%;overflow:visible;
+    border-radius:4px;
+  }
+  body.print-report #report .chartbox .ctitle{
+    font-size:var(--prt-chart-title);margin:0 0 2px;line-height:1.3;
+  }
+  body.print-report #report .legend{
+    font-size:var(--prt-legend);gap:6px;margin:0 0 2px;line-height:1.3;
+  }
+  body.print-report #report .chart-datatable{margin:0 0 2px;}
+  body.print-report #report .chart-datatable table{
+    font-size:var(--prt-table);line-height:var(--prt-table-lh);
+  }
+  body.print-report #report .chart-datatable th,
+  body.print-report #report .chart-datatable td{padding:var(--prt-table-pad);}
+  body.print-report #report .chart-scroll{
+    overflow:visible !important;max-width:100% !important;width:100% !important;
+  }
+  body.print-report #report .chart-scroll > div{
+    width:100% !important;max-width:100% !important;
+  }
+  body.print-report #report svg.chart{
+    width:100% !important;height:auto !important;max-width:100% !important;
+    display:block;margin:0 auto;
+  }
+  body.print-report #report .tablewrap{
+    overflow:visible !important;max-height:none !important;
+    border-radius:0;margin:2px 0 0;
+  }
+  body.print-report #report .tablewrap table{
+    width:100%;font-size:var(--prt-table);line-height:var(--prt-table-lh);
+    letter-spacing:-0.01em;table-layout:auto;
+  }
+  body.print-report #report .tablewrap th{
+    position:static !important;background:#eef1f9 !important;
+  }
+  body.print-report #report .tablewrap th,
+  body.print-report #report .tablewrap td{
+    padding:var(--prt-table-pad);word-break:keep-all;
+  }
+  body.print-report #report .tablewrap thead{display:table-header-group;}
+  body.print-report #report .tablewrap tr{
+    page-break-inside:avoid;break-inside:avoid;
+  }
+  body.print-report #report .tablewrap tr.region-gn td{background:#cfe0ff !important;}
+  body.print-report #report .tablewrap tr.region-out td{background:#ffdcc2 !important;}
+  body.print-report #report .tablewrap tr.region-gn td.firstcol{background:#b6cffb !important;}
+  body.print-report #report .tablewrap tr.region-out td.firstcol{background:#ffcaa3 !important;}
+  body.print-report #report .tablewrap tr.total td{background:#fff7e6 !important;}
+  @media print{
+    @page{size:A4 portrait;margin:10mm 12mm;}
+    body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    header,.app-nav,.app-footer,#pageData,#results,.no-print{display:none !important;}
+    main{max-width:none;padding:0;margin:0;}
+    #pageReport,#report{display:block !important;}
+    #pageReport.hide,#report.hide{display:block !important;}
+  }
 </style>
 </head>
 <body>
 <header>
-  <h1>���� �м� ���α׷�</h1>
-  <p>ERP ���� �Ǹ���Ȳ CSV �� �ŷ�ó �з��� / ǰ�� �з��� / ���� ǰ�� ����,�������� �ڵ� ����</p>
+  <h1>매출 분석 프로그램</h1>
+  <p>ERP 판매현황 CSV에서 거래처 분류집계 · 품목 분류집계 · 직납 품목 집계, 그리고 거래처별 구매현황 지역분류를 자동 생성합니다</p>
 </header>
 
 <main>
+  <nav class="app-nav" id="appNav" aria-label="메인 메뉴">
+    <button type="button" class="app-nav-btn active" data-page="pageData">1. 연간월별 데이터</button>
+    <button type="button" class="app-nav-btn" data-page="pageReport">2. 기간 비교분석 보고서</button>
+    <button type="button" class="app-nav-btn" data-page="pageMaster">3. 분류코드 관리</button>
+    <button type="button" class="app-nav-btn nav-license" data-page="pageLicense">오픈소스·라이선스</button>
+  </nav>
+
+  <section id="pageData" class="app-page">
   <div class="card">
-    <h2>1. ������ ���� �ҷ�����</h2>
-    <p class="desc">�Ŵ� ERP���� ���� �Ǹ���Ȳ ������ �ְ� �м��� �����ϼ���.</p>
+    <h2>데이터 파일 불러오기</h2>
+    <p class="desc">이카운트 등 ERP에서 내려받은 판매현황 · 구매현황 CSV를 불러온 뒤 [분석 실행]을 누르세요.
+       여러 달이 한 파일에 있어도 <b>월별로 나눠 분석·저장</b>합니다. 분석한 CSV·월별 데이터는 <b>프로그램 폴더(저장데이터)</b>에 자동 보관되어 다시 켜도 유지됩니다.</p>
     <div class="file-row">
-      <label>(1) ǰ�� �Ǹ���Ȳ <span class="sub">�ʼ� / ǰ���ڵ� ����</span></label>
-      <button class="btn load" type="button" data-target="itemFile">�ҷ�����</button>
-      <span class="fname" id="name_itemFile">���õ� ���� ����</span>
-      <button class="clear" type="button" data-target="itemFile" title="�����">�����</button>
-      <input type="file" id="itemFile" accept=".csv" class="hidden-input">
+      <label>(1) 품목·거래처별 판매현황 <span class="sub">필수 · 품목코드·거래처코드·일별</span></label>
+      <button class="btn load" type="button" data-target="salesFile">불러오기</button>
+      <span class="fname" id="name_salesFile">선택된 파일 없음</span>
+      <button class="clear" type="button" data-target="salesFile" title="지우기">지우기</button>
+      <input type="file" id="salesFile" accept=".csv" class="hidden-input">
     </div>
     <div class="file-row">
-      <label>(2) �ŷ�ó�� �Ǹ���Ȳ <span class="sub">�ʼ� / �ŷ�ó�ڵ� ����</span></label>
-      <button class="btn load" type="button" data-target="custFile">�ҷ�����</button>
-      <span class="fname" id="name_custFile">���õ� ���� ����</span>
-      <button class="clear" type="button" data-target="custFile" title="�����">�����</button>
-      <input type="file" id="custFile" accept=".csv" class="hidden-input">
+      <label>(2) 거래처별 구매현황 <span class="sub">선택 · 거래처코드 지역분류</span></label>
+      <button class="btn load" type="button" data-target="purchaseFile">불러오기</button>
+      <span class="fname" id="name_purchaseFile">선택된 파일 없음</span>
+      <button class="clear" type="button" data-target="purchaseFile" title="지우기">지우기</button>
+      <input type="file" id="purchaseFile" accept=".csv" class="hidden-input">
     </div>
 
     <div class="actions">
-      <button class="btn" id="runBtn">�м� ����</button>
-      <button class="btn secondary" id="xlsBtn" disabled>���� �ٿ�ε�(���� ��Ʈ)</button>
+      <button class="btn" id="runBtn">분석 실행</button>
     </div>
-    <div class="hint">���� ���� = (1) ǰ���ڵ忡 '����' ���� �� (2) ǰ����� �ູ / ������� / ���׸��� / �Ͼ��� �� �ϳ� ����</div>
+    <div class="hint">직납 기준 = (1) 품목코드에 '직납'이 포함되고 (2) 품목명에 아래 [직납 인식 브랜드] 중 하나가 포함된 경우</div>
+    <div class="hint">구매현황 지역분류 = 거래처코드가 z4~z6 이면 '경상남도외 생산시설', 그 외(a~z3)는 '경상남도 생산시설'</div>
+    <div class="hint">판매 CSV는 품목코드·거래처코드·수량·합계가 한 행에 있는 <b>품목별·거래처별</b> 형식입니다. 여러 달은 <b>일별</b>(또는 일자) 열로 월별 자동 분리됩니다.</div>
     <div class="status" id="status"></div>
   </div>
 
   <div class="card">
-    <h2>�з�ǥ (�⺻ �����ͺ��̽�)</h2>
-    <p class="desc">�з� ������ ���α׷��� �̹� ����Ǿ� �־� <b>���� �ø��� �ʾƵ� �˴ϴ�.</b>
-       ������ �ٲٰ� ���� ���� ���� 1ȸ ����ϸ�, �� �������� ����Ǿ� �������� �ڵ����� ���Դϴ�.</p>
-    <div class="file-row">
-      <label>ǰ��з� ��Īǥ <span class="sub">���� / ���� 1ȸ</span></label>
-      <button class="btn load secondary" type="button" data-target="itemMapFile">���(�ҷ�����)</button>
-      <span class="fname" id="status_itemMap">�⺻ ���尪 ��� ��</span>
-      <button class="reset" type="button" id="resetItemMap" title="�⺻������ �ǵ�����">�ʱ�ȭ</button>
-      <input type="file" id="itemMapFile" accept=".csv" class="hidden-input">
-    </div>
-    <div class="file-row">
-      <label>�ŷ�ó�з� ��Īǥ <span class="sub">���� / ���� 1ȸ</span></label>
-      <button class="btn load secondary" type="button" data-target="custMapFile">���(�ҷ�����)</button>
-      <span class="fname" id="status_custMap">�⺻ ���尪 ��� ��</span>
-      <button class="reset" type="button" id="resetCustMap" title="�⺻������ �ǵ�����">�ʱ�ȭ</button>
-      <input type="file" id="custMapFile" accept=".csv" class="hidden-input">
+    <h2>저장된 월별 데이터</h2>
+    <p class="desc">[분석 실행] 시 월별로 자동 저장됩니다. 연도·월을 선택해 그 달 결과를 보거나,
+       [1년 한눈에 보기]로 해당 연도 1~12월을 한 표에서 비교할 수 있습니다.</p>
+    <div id="savedMonthPicker" class="monthpicker">
+      <p id="savedMonthEmpty" class="muted">아직 저장된 월이 없습니다. CSV를 불러온 뒤 [분석 실행]을 누르세요.</p>
+      <div id="savedMonthRow" class="monthpicker-row hide">
+        <label for="savedYearSel">연도</label>
+        <select id="savedYearSel" class="yearsel" aria-label="저장된 연도"></select>
+        <label for="savedMonthSel">월</label>
+        <select id="savedMonthSel" class="yearsel" aria-label="저장된 월"></select>
+        <button type="button" class="btn load-month" id="savedMonthViewBtn">월별 보기</button>
+        <button type="button" class="del-month" id="savedMonthDelBtn" title="선택한 월 데이터 삭제">삭제</button>
+        <button type="button" class="btn annual-view" id="savedAnnualBtn">이 연도 1년 한눈에 보기</button>
+        <button type="button" class="btn xls-dl" id="xlsBtn" disabled>엑셀 다운로드(여러 시트)</button>
+        <span class="count" id="savedMonthCount"></span>
+      </div>
+      <p class="hint" style="margin-top:8px">엑셀 다운로드 — 화면에 보이는 결과, 또는 저장된 월별 데이터를 <b>종류별 1시트</b>(1월·2월… 열)로 받을 수 있습니다. 저장 후 <b>다운로드</b> 폴더가 자동으로 열립니다.</p>
     </div>
   </div>
 
   <div id="results" class="hide">
+    <div class="savebar">
+      <label for="monthInput">기준월</label>
+      <input type="month" id="monthInput">
+      <button class="btn" type="button" id="saveMonthBtn">이 달 데이터 저장</button>
+      <span class="vlabel" id="viewLabel"></span>
+    </div>
     <div class="summary" id="kpis"></div>
     <div class="card">
       <div class="tabbtns" id="tabbtns"></div>
       <div id="tables"></div>
     </div>
   </div>
+  </section>
+
+  <section id="pageMaster" class="app-page hide">
+  <div class="card">
+    <h2>분류코드 관리</h2>
+    <p class="desc">품목·거래처 분류코드를 직접 입력하거나 CSV로 일괄 등록합니다. 변경 내용은 이 PC에 저장되어 다음 실행 시에도 유지됩니다.</p>
+    <div class="master-grid">
+      <section class="category-panel" id="itemCategoryPanel">
+        <h3>품목분류코드</h3>
+        <p class="desc">코드는 영문 소문자 1글자(a~z). 보고서 품목 행 순서는 코드 순서를 따릅니다.</p>
+        <div class="master-form">
+          <label>코드 <input type="text" id="itemCatCodeInput" maxlength="1" placeholder="a"></label>
+          <label>분류명 <input type="text" id="itemCatNameInput" maxlength="64"></label>
+          <label><input type="checkbox" id="itemCatActiveInput" checked> 사용</label>
+          <button type="button" class="btn" id="itemCatAddBtn">추가</button>
+        </div>
+        <div class="tablewrap">
+          <table class="master-table">
+            <thead>
+              <tr>
+                <th class="col-code">코드</th>
+                <th class="col-name">분류명</th>
+                <th class="col-use">사용</th>
+                <th class="col-count">데이터 건수</th>
+                <th class="col-actions">관리</th>
+              </tr>
+            </thead>
+            <tbody id="itemCategoryTbody"></tbody>
+          </table>
+        </div>
+        <div class="master-upload-form">
+          <h4>CSV 일괄 업로드</h4>
+          <p class="hint">품목및거래처분류코드.csv 형식 — 품목코드 구간만 사용됩니다.</p>
+          <label>파일 <input type="file" id="itemCatUploadFile" accept=".csv"></label>
+          <div class="mode-options">
+            <label><input type="radio" name="itemCatUploadMode" value="merge" checked> 기존 유지 + 새 코드 추가·이름 수정 (권장)</label>
+            <label><input type="radio" name="itemCatUploadMode" value="replace"> 전체 교체</label>
+          </div>
+          <button type="button" class="btn secondary" id="itemCatUploadBtn">품목분류 업로드</button>
+          <button type="button" class="reset" id="resetItemMap" title="기본값으로 되돌리기">초기화</button>
+        </div>
+      </section>
+      <section class="category-panel" id="custCategoryPanel">
+        <h3>거래처분류코드</h3>
+        <p class="desc">코드는 영문 소문자 1글자(a~z). 보고서 거래처 구간 순서는 코드 순서를 따릅니다.</p>
+        <div class="master-form">
+          <label>코드 <input type="text" id="custCatCodeInput" maxlength="1" placeholder="a"></label>
+          <label>분류명 <input type="text" id="custCatNameInput" maxlength="64"></label>
+          <label><input type="checkbox" id="custCatActiveInput" checked> 사용</label>
+          <button type="button" class="btn" id="custCatAddBtn">추가</button>
+        </div>
+        <div class="tablewrap">
+          <table class="master-table">
+            <thead>
+              <tr>
+                <th class="col-code">코드</th>
+                <th class="col-name">분류명</th>
+                <th class="col-use">사용</th>
+                <th class="col-count">데이터 건수</th>
+                <th class="col-actions">관리</th>
+              </tr>
+            </thead>
+            <tbody id="custCategoryTbody"></tbody>
+          </table>
+        </div>
+        <div class="master-upload-form">
+          <h4>CSV 일괄 업로드</h4>
+          <p class="hint">품목및거래처분류코드.csv 형식 — 거래처코드 구간만 사용됩니다.</p>
+          <label>파일 <input type="file" id="custCatUploadFile" accept=".csv"></label>
+          <div class="mode-options">
+            <label><input type="radio" name="custCatUploadMode" value="merge" checked> 기존 유지 + 새 코드 추가·이름 수정 (권장)</label>
+            <label><input type="radio" name="custCatUploadMode" value="replace"> 전체 교체</label>
+          </div>
+          <button type="button" class="btn secondary" id="custCatUploadBtn">거래처분류 업로드</button>
+          <button type="button" class="reset" id="resetCustMap" title="기본값으로 되돌리기">초기화</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>직납 인식 브랜드</h2>
+    <p class="desc">품목명에 아래 브랜드 중 하나가 들어있고 품목코드에 '직납'이 있으면 직납으로 집계됩니다.
+       브랜드를 추가/삭제하면 이 브라우저에 저장되어 다음부터 자동으로 적용됩니다.</p>
+    <div class="brandrow">
+      <input type="text" id="brandInput" placeholder="브랜드명 입력 (예: 마중물)" maxlength="30">
+      <button class="btn" type="button" id="addBrandBtn">추가</button>
+      <button class="reset" type="button" id="resetBrands" title="기본 브랜드로 되돌리기">초기화</button>
+    </div>
+    <div id="brandChips" class="chips"></div>
+  </div>
+  </section>
+
+  <section id="pageReport" class="app-page hide">
+  <div class="card no-print" id="reportMenuCard">
+    <h2>기간 비교 분석 보고서</h2>
+    <p class="desc">저장된 월별 데이터를 묶어 비교 보고서를 만듭니다.
+       기준·비교 기간 <b>사이의 모든 연도·월</b>도 함께 포함합니다.
+       예) 기준 2026년 1~5월 vs 비교 2023년 1~5월 → 2024·2025년 데이터 포함</p>
+    <div class="reportbar">
+      <div class="report-period">
+        <span class="rp-title">기준 기간</span>
+        <input type="number" id="rptCurYear" min="2000" max="2100" aria-label="기준 연도">
+        <span>년</span>
+        <input type="number" id="rptCurStart" class="rpt-month" min="1" max="12" aria-label="기준 시작월">
+        <span>월 ~</span>
+        <input type="number" id="rptCurEnd" class="rpt-month" min="1" max="12" aria-label="기준 종료월">
+        <span>월</span>
+      </div>
+      <div class="report-period">
+        <span class="rp-title">비교 기간</span>
+        <input type="number" id="rptPrevYear" min="2000" max="2100" aria-label="비교 연도">
+        <span>년</span>
+        <input type="number" id="rptPrevStart" class="rpt-month" min="1" max="12" aria-label="비교 시작월">
+        <span>월 ~</span>
+        <input type="number" id="rptPrevEnd" class="rpt-month" min="1" max="12" aria-label="비교 종료월">
+        <span>월</span>
+      </div>
+      <button class="btn" type="button" id="buildReportBtn">분석 보고서 생성</button>
+    </div>
+  </div>
+
+  <div id="report" class="hide">
+    <div class="card report-card">
+      <div class="report-actions no-print">
+        <button class="btn" type="button" id="printReportBtn">인쇄</button>
+        <button class="btn secondary" type="button" id="savePdfReportBtn" title="인쇄 대화상자에서 'PDF로 저장'을 선택하세요">PDF 저장</button>
+        <button class="btn secondary xls-dl" type="button" id="saveExcelReportBtn">엑셀 저장</button>
+        <button class="btn secondary" type="button" id="closeReportBtn">보고서 닫기</button>
+      </div>
+      <div id="reportBody"></div>
+    </div>
+  </div>
+  </section>
+
+  <section id="pageLicense" class="app-page hide">
+    <div class="card license-page">
+      <h2>오픈소스·라이선스 고지</h2>
+      <p class="ver">앱 버전 <span id="appVersionLabel">1.0.0</span></p>
+      <p class="notice">본 프로그램은 오픈소스 라이브러리를 사용합니다. 법적 효력·최신 상태는 각 프로젝트의 공식 라이선스 전문을 우선합니다. 배포 폴더의 <b>오픈소스_라이선스_고지.txt</b> 와 동일 내용입니다.</p>
+
+      <h3>1. 응용 프로그램 소스 코드</h3>
+      <p>매출분석.html, app_launcher.py 등 본 프로그램의 응용 소스 코드에 대한 권리는 개발·보유 주체에 귀속됩니다. 무단 복제·배포를 금합니다.</p>
+
+      <h3>2. 화면(프론트엔드) JavaScript</h3>
+      <p>분석 화면·차트(SVG)·표 렌더링은 <b>외부 CDN·npm 라이브러리 없이</b> 순수 JavaScript로 작성되었습니다. Chart.js, jQuery, React 등은 사용하지 않습니다.</p>
+
+      <h3>3. 배포본(EXE)에 포함되는 오픈소스</h3>
+      <table>
+        <thead><tr><th>이름</th><th>라이선스</th><th>용도</th></tr></thead>
+        <tbody>
+          <tr><td>Python</td><td>PSF License</td><td>실행 환경 (EXE 동봉)</td></tr>
+          <tr><td><a href="https://github.com/r0x0r/pywebview" target="_blank" rel="noopener">pywebview</a></td><td>BSD-3-Clause</td><td>독립 창·화면 표시</td></tr>
+          <tr><td><a href="https://foss.heptapod.net/openpyxl/openpyxl" target="_blank" rel="noopener">openpyxl</a></td><td>MIT</td><td>엑셀 저장·차트 이미지</td></tr>
+          <tr><td>et-xmlfile</td><td>MIT</td><td>openpyxl 의존</td></tr>
+          <tr><td><a href="https://github.com/python-pillow/Pillow" target="_blank" rel="noopener">Pillow</a></td><td>MIT-CMU (HPND)</td><td>차트 PNG 처리</td></tr>
+          <tr><td><a href="https://pyinstaller.org" target="_blank" rel="noopener">PyInstaller</a></td><td>GPL v2 + 예외</td><td>EXE 부트로더</td></tr>
+        </tbody>
+      </table>
+      <p>PyInstaller는 GPL v2 라이선스이나, linking exception으로 비(非)GPL 프로그램을 패키징·배포할 수 있습니다.</p>
+
+      <h3>4. 운영 체제·런타임</h3>
+      <ul>
+        <li><b>Microsoft Edge WebView2</b> — Windows에서 화면 표시 (OS 기본 포함 또는 별도 런타임)</li>
+        <li><b>Microsoft Windows</b> — 운영 체제</li>
+      </ul>
+
+      <h3>5. 개발 PC 전용 (배포 PC 불필요)</h3>
+      <p>앱빌드.bat 실행 시 PyInstaller·pip를 사용합니다. 다른 PC에는 Python 설치가 필요 없습니다.</p>
+    </div>
+  </section>
+
+  <footer class="app-footer no-print" id="appFooter">
+    <p>매출 분석 프로그램 · 제작 <strong id="appAuthorLabel">백승정</strong></p>
+  </footer>
 </main>
 
 <script>
 "use strict";
 
-/* ===== �⺻ �з�ǥ (���� �����ͺ��̽�) ===== */
+const APP_VERSION = "1.0.0";
+const APP_AUTHOR = "백승정";
+
+/* ===== 기본 분류표 (내장 데이터베이스) ===== */
 const DEFAULT_ITEM_MAP = {
-  a:"�������", b:"ȭ����, ��Ƽ��", c:"�尩 �Ǻ�", d:"����", e:"�繫��ǰ",
-  f:"�μ����˹�", g:"����", h:"��ǰ", i:"������", j:"������", k:"�뿪����",
-  l:"����ũ", m:"��Ʈ�Ϻ�����", n:"���̹ڽ�", o:"����������", p:"����",
-  q:"LED��", r:"������", s:"�����ε�", t:"���ݼ�����ħ", u:"������", z:"����������"
+  a:"복사용지", b:"화장지, 물티슈", c:"장갑 피복", d:"가구", e:"사무용품",
+  f:"인쇄판촉물", g:"세제", h:"식품", i:"마대비닐", j:"종이컵", k:"용역서비스",
+  l:"마스크", m:"노트북보관장", n:"종이박스", o:"전기충전기", p:"간판",
+  q:"LED등", r:"전기기기", s:"블라인드", t:"원격수도검침", u:"분전반", z:"종량제봉투"
 };
 const DEFAULT_CUST_MAP = {
-  z:"��Ÿ", e:"��Ÿ���", d:"�������", c:"�������", b:"�������", a:"������ġ��ü"
+  z:"기타기관", e:"기타기관", d:"공공기관", c:"국가기관", b:"교육기관", a:"지방자치단체"
 };
-const BRANDS = ["�ູ","�������","���׸���","�Ͼ���"];
+const DEFAULT_BRANDS = ["행복","희망나라","예그리나","하얀기업"];
 const LS_ITEM = "salesAnalyzer_itemMap";
 const LS_CUST = "salesAnalyzer_custMap";
+const LS_MONTHS = "salesAnalyzer_months";
+const LS_BRANDS = "salesAnalyzer_brands";
+const SESSION_API = "/api/session";
+const MONTHS_JSON_URL = "/%EC%A0%80%EC%9E%A5%EB%8D%B0%EC%9D%B4%ED%84%B0/months.json";
 
 let resultTables = null;
+let monthsCache = null;
+let currentKpis = null;
+let viewingMonth = null;
+let viewingYear = null;
+let lastReportExport = null;
 let currentItemMap = Object.assign({}, DEFAULT_ITEM_MAP);
 let currentCustMap = Object.assign({}, DEFAULT_CUST_MAP);
+let itemCategoryStore = {};
+let custCategoryStore = {};
+let categoryUsageCounts = { item: {}, cust: {} };
+let currentBrands = DEFAULT_BRANDS.slice();
+let sessionFileCache = { sales: null, purchase: null };
+
+const CSV_FILE_LABELS = {
+  salesFile: "품목·거래처별 판매현황",
+  purchaseFile: "거래처별 구매현황"
+};
+
+function csvCacheKey(inputId){
+  return inputId === "salesFile" ? "sales" : inputId === "purchaseFile" ? "purchase" : null;
+}
 
 const $ = id => document.getElementById(id);
+
+function showAppPage(pageId, opts){
+  opts = opts || {};
+  document.querySelectorAll(".app-page").forEach(p=>{
+    p.classList.toggle("hide", p.id !== pageId);
+  });
+  document.querySelectorAll(".app-nav-btn").forEach(b=>{
+    b.classList.toggle("active", b.dataset.page === pageId);
+  });
+  if(pageId === "pageData"){
+    const resultsEl = $("results");
+    if(resultsEl){
+      if(opts.showResults) resultsEl.classList.remove("hide");
+      else resultsEl.classList.add("hide");
+    }
+    if(!opts.showResults){
+      setResultsLayout(false);
+      const page = $("pageData");
+      if(page) page.scrollIntoView({behavior:"smooth", block:"start"});
+    }
+  }
+  if(pageId === "pageReport"){
+    const reportEl = $("report");
+    if(reportEl){
+      if(opts.showReport) reportEl.classList.remove("hide");
+      else reportEl.classList.add("hide");
+    }
+    if(!opts.showReport){
+      const menu = $("reportMenuCard");
+      if(menu) menu.scrollIntoView({behavior:"smooth", block:"start"});
+    }
+  }
+  if(pageId === "pageMaster"){
+    renderCategoryPanels();
+    const page = $("pageMaster");
+    if(page) page.scrollIntoView({behavior:"smooth", block:"start"});
+  }
+  if(pageId === "pageLicense"){
+    const page = $("pageLicense");
+    if(page) page.scrollIntoView({behavior:"smooth", block:"start"});
+  }
+}
+
+function bindNavButtons(){
+  document.querySelectorAll(".app-nav-btn").forEach(btn=>{
+    if(btn.dataset.navBound) return;
+    btn.dataset.navBound = "1";
+    btn.addEventListener("click", ()=>{
+      showAppPage(btn.dataset.page, { showResults: false, showReport: false });
+    });
+  });
+}
+bindNavButtons();
+
+function on(id, event, handler){
+  const el = $(id);
+  if(el) el.addEventListener(event, handler);
+}
 
 function logStatus(msg){
   const s = $("status");
@@ -169,12 +774,410 @@ function firstLetter(code){
 }
 function findBrand(name){
   const t = String(name);
-  for(const b of BRANDS){ if(t.includes(b)) return b; }
+  for(const b of currentBrands){ if(b && t.includes(b)) return b; }
   return "";
 }
 function fmt(n){ return Math.round(n).toLocaleString("ko-KR"); }
 
-/* ���ε� ���� ���ڵ� �ڵ� �Ǻ�(UTF-8 �켱, ���� �� EUC-KR/CP949) */
+/* 거래처코드 지역분류 : z4~z6 이면 경상남도외, 그 외(a~z3)는 경상남도 */
+function regionOf(code){
+  const m = String(code).trim().toLowerCase().match(/^z([4-6])/);
+  return m ? "경상남도외 생산시설" : "경상남도 생산시설";
+}
+
+/* 파일 내용에서 첫 날짜(기간 시작일)를 찾아 'YYYY-MM' 기준월로 변환 */
+function detectMonth(text){
+  const m = String(text).match(/(20\d{2})\s*[\/.\-]\s*(\d{1,2})\s*[\/.\-]\s*\d{1,2}/);
+  if(!m) return "";
+  const mo = parseInt(m[2],10);
+  if(mo<1 || mo>12) return "";
+  return m[1]+"-"+String(mo).padStart(2,"0");
+}
+
+function monthKeyFromCell(cell, fallbackYear){
+  const s = String(cell||"").trim();
+  if(!s) return "";
+  const compact = s.replace(/\D/g,"");
+  if(compact.length >= 6){
+    const y = compact.slice(0,4);
+    const mo = parseInt(compact.slice(4,6),10);
+    if(mo>=1 && mo<=12) return y+"-"+String(mo).padStart(2,"0");
+  }
+  const m = s.match(/(20\d{2})\s*[\/.\-년]\s*(\d{1,2})/);
+  if(m){
+    const mo = parseInt(m[2],10);
+    if(mo>=1 && mo<=12) return m[1]+"-"+String(mo).padStart(2,"0");
+  }
+  if(/^\d{1,2}$/.test(s) && fallbackYear){
+    const mo = parseInt(s,10);
+    if(mo>=1 && mo<=12) return fallbackYear+"-"+String(mo).padStart(2,"0");
+  }
+  return "";
+}
+
+function isSummaryRow(row){
+  if(!row || !row.length) return true;
+  const joined = row.join("");
+  if(!/합계|소계/.test(joined)) return false;
+  return !row.some(c => /^20\d{2}/.test(String(c).trim()));
+}
+
+function isHeaderLikeRow(row){
+  const j = row.join("");
+  return (/품목코드|거래처코드/.test(j) || /일자-No/.test(j)) && /품목명|거래처명|거래처별|월별/.test(j);
+}
+
+function rowMonthKey(row, head, fallbackYear){
+  const iMonth = colIndex(head, ["월별"], ["월별"]);
+  if(iMonth>=0 && iMonth<row.length){
+    const k = monthKeyFromCell(row[iMonth], fallbackYear);
+    if(k) return k;
+  }
+  const iDate = colIndex(head, ["일자-No.","일자-No","일자","일별","전표별"], ["일자","일별","전표"]);
+  if(iDate>=0 && iDate<row.length){
+    const k = monthKeyFromCell(row[iDate], fallbackYear);
+    if(k) return k;
+  }
+  return "";
+}
+
+function parseCsvDataset(text, keyCols){
+  const rows = parseCSV(text);
+  const h = findHeaderRow(rows, keyCols);
+  const head = rows[h].map(x=>String(x).trim());
+  return {rows, h, head};
+}
+
+function datasetHasMonthColumn(ds){
+  if(!ds) return false;
+  return colIndex(ds.head, ["월별"], ["월별"]) >= 0 ||
+         colIndex(ds.head, ["일자-No.","일자-No","일자","일별","전표별"], ["일자","일별","전표"]) >= 0;
+}
+
+function parseSalesCsvDataset(text){
+  const ds = parseCsvDataset(text, ["품목코드","상품코드","거래처코드","월별"]);
+  const hasItem = colIndex(ds.head, ["품목코드","상품코드"], ["품목코드","상품코드"]) >= 0;
+  const hasCust = colIndex(ds.head, ["거래처코드"], ["거래처코드"]) >= 0;
+  if(!hasItem) throw new Error("판매 CSV에서 '품목코드' 열을 찾지 못했습니다.");
+  if(!hasCust) throw new Error("판매 CSV에서 '거래처코드' 열을 찾지 못했습니다.");
+  return ds;
+}
+
+function csvHasDataRows(ds){
+  return ds && ds.rows.length > ds.h + 1;
+}
+
+function collectMonthsFromDataset(ds){
+  const months = new Set();
+  let fallbackYear = "";
+  for(let i=ds.h+1;i<ds.rows.length;i++){
+    const r = ds.rows[i];
+    if(!r || !r.length || isSummaryRow(r) || isHeaderLikeRow(r)) continue;
+    const k = rowMonthKey(r, ds.head, fallbackYear);
+    if(k){
+      months.add(k);
+      if(!fallbackYear) fallbackYear = k.slice(0,4);
+    }
+  }
+  return months;
+}
+
+function collectAllMonths(itemDs, custDs, purDs){
+  const all = new Set();
+  [itemDs, custDs, purDs].forEach(ds=>{
+    if(ds) collectMonthsFromDataset(ds).forEach(m=>all.add(m));
+  });
+  return [...all].sort();
+}
+
+function filterDatasetByMonth(ds, targetMonth){
+  const fy = targetMonth.slice(0,4);
+  const out = [ds.rows[ds.h]];
+  for(let i=ds.h+1;i<ds.rows.length;i++){
+    const r = ds.rows[i];
+    if(!r || !r.length || isSummaryRow(r) || isHeaderLikeRow(r)) continue;
+    if(rowMonthKey(r, ds.head, fy) === targetMonth) out.push(r);
+  }
+  return {rows: out, h: 0, head: out[0].map(x=>String(x).trim())};
+}
+
+function filterDatasetForMonth(ds, month, allowUndated){
+  if(!ds) return null;
+  if(!datasetHasMonthColumn(ds)) return allowUndated ? ds : null;
+  const filtered = filterDatasetByMonth(ds, month);
+  return csvHasDataRows(filtered) ? filtered : null;
+}
+
+function amountsMatch(a, b, tolerance){
+  tolerance = tolerance == null ? 1 : tolerance;
+  return Math.abs(Math.round(a) - Math.round(b)) <= tolerance;
+}
+
+function summarizeSalesDataset(ds, kind){
+  const label = kind === "item" ? "품목" : "거래처";
+  const errors = [];
+  const warnings = [];
+  const head = ds.head;
+  const codeCol = kind === "item"
+    ? colIndex(head, ["품목코드","상품코드"], ["품목코드","상품코드"])
+    : colIndex(head, ["거래처코드"], ["거래처코드"]);
+  const qtyCol = colIndex(head, ["수량"]);
+  const amtCol = colIndex(head, ["공급가액"], null);
+  const sumCol = colIndex(head, ["합계"]);
+  const amtIdx = amtCol >= 0 ? amtCol : sumCol;
+
+  if(codeCol < 0) errors.push(label+" 파일에서 '"+(kind==="item"?"품목코드":"거래처코드")+"' 열을 찾지 못했습니다.");
+  if(amtIdx < 0) errors.push(label+" 파일에서 '합계' 또는 '공급가액' 열을 찾지 못했습니다.");
+
+  let rowCount = 0;
+  let totalAmt = 0;
+  let totalQty = 0;
+  const unknownCodes = new Set();
+  const store = kind === "item" ? itemCategoryStore : custCategoryStore;
+
+  if(codeCol >= 0 && amtIdx >= 0){
+    for(let i=ds.h+1; i<ds.rows.length; i++){
+      const r = ds.rows[i];
+      if(!r || !r.length || isSummaryRow(r) || isHeaderLikeRow(r)) continue;
+      const code = String(r[codeCol]||"").trim();
+      if(!code) continue;
+      rowCount++;
+      totalAmt += num(r[amtIdx]);
+      if(qtyCol >= 0) totalQty += num(r[qtyCol]);
+      const k = firstLetter(code);
+      if(k){
+        const rec = store[k];
+        if(!rec || !rec.active) unknownCodes.add(k);
+      }
+    }
+  }
+
+  if(!errors.length && rowCount === 0) errors.push(label+" 파일에 분석할 데이터 행이 없습니다.");
+
+  return {
+    kind, label, rowCount, totalAmt, totalQty,
+    unknownCodes: [...unknownCodes].sort(),
+    errors, warnings
+  };
+}
+
+function compareSalesStatsPair(itemStats, custStats, scopeLabel){
+  const errors = [];
+  const warnings = [];
+  const checks = [];
+  const prefix = scopeLabel ? scopeLabel + " — " : "";
+
+  errors.push(...itemStats.errors, ...custStats.errors);
+
+  if(itemStats.unknownCodes.length){
+    warnings.push(prefix+"미등록·미사용 품목분류코드: "+itemStats.unknownCodes.join(", ")+" (미분류로 집계)");
+  }
+  if(custStats.unknownCodes.length){
+    warnings.push(prefix+"미등록·미사용 거래처분류코드: "+custStats.unknownCodes.join(", ")+" (미분류로 집계)");
+  }
+
+  if(itemStats.rowCount > 0 && custStats.rowCount > 0){
+    const diff = Math.abs(itemStats.totalAmt - custStats.totalAmt);
+    const base = Math.max(itemStats.totalAmt, custStats.totalAmt, 1);
+    const pct = diff / base * 100;
+    const amtOk = amountsMatch(itemStats.totalAmt, custStats.totalAmt) || pct <= 0.01;
+    checks.push({
+      label: prefix+"품목·거래처 CSV 매출 합계",
+      passed: amtOk,
+      detail: amtOk
+        ? fmt(itemStats.totalAmt)+"원 일치"
+        : "품목 "+fmt(itemStats.totalAmt)+"원 / 거래처 "+fmt(custStats.totalAmt)+"원 (차이 "+fmt(diff)+"원)"
+    });
+    if(!amtOk){
+      errors.push(prefix+"품목·거래처 파일 매출 합계가 일치하지 않습니다. (품목 "+fmt(itemStats.totalAmt)+"원 / 거래처 "+fmt(custStats.totalAmt)+"원)");
+    }else if(diff > 0){
+      warnings.push(prefix+"품목·거래처 매출 합계 "+fmt(diff)+"원 차이 (반올림·절사 가능)");
+    }
+
+    const rowOk = itemStats.rowCount === custStats.rowCount;
+    checks.push({
+      label: prefix+"CSV 데이터 건수",
+      passed: true,
+      detail: "품목 "+fmt(itemStats.rowCount)+"건 / 거래처 "+fmt(custStats.rowCount)+"건"
+        +(rowOk ? "" : " (집계 단위가 다를 수 있음)")
+    });
+    if(!rowOk){
+      warnings.push(prefix+"품목 파일 "+fmt(itemStats.rowCount)+"건 / 거래처 파일 "+fmt(custStats.rowCount)+"건 — ERP 집계 방식이 다르면 정상일 수 있습니다.");
+    }
+  }
+
+  return { passed: errors.length === 0, errors, warnings, checks, itemStats, custStats };
+}
+
+function verifyCsvDatasets(itemDs, custDs, purDs){
+  const itemStats = summarizeSalesDataset(itemDs, "item");
+  const custStats = summarizeSalesDataset(custDs, "cust");
+  const pair = compareSalesStatsPair(itemStats, custStats, "");
+  const errors = pair.errors.slice();
+  const warnings = pair.warnings.slice();
+  const checks = pair.checks.slice();
+
+  let purStats = null;
+  if(purDs && csvHasDataRows(purDs)){
+    purStats = summarizeSalesDataset(purDs, "cust");
+    errors.push(...purStats.errors);
+    if(!purStats.errors.length && purStats.rowCount === 0){
+      warnings.push("구매현황 파일에 분석할 데이터 행이 없습니다.");
+    }
+    if(purStats.rowCount > 0){
+      checks.push({
+        label: "구매현황 CSV 합계",
+        passed: true,
+        detail: fmt(purStats.rowCount)+"건 · "+fmt(purStats.totalAmt)+"원"
+      });
+    }
+  }
+
+  return {
+    passed: errors.length === 0,
+    errors, warnings, checks,
+    itemStats, custStats, purStats
+  };
+}
+
+function getTableGrandTotal(table, colName){
+  if(!table || !table.rows.length) return 0;
+  const ci = table.columns.indexOf(colName);
+  if(ci < 0) return 0;
+  const last = table.rows[table.rows.length-1];
+  if(last && String(last[0]).trim() === "총합계") return num(last[ci]);
+  let sum = 0;
+  for(const r of table.rows) sum += num(r[ci]);
+  return sum;
+}
+
+function kpiAmount(kpi){
+  if(!kpi || !kpi.v) return 0;
+  return num(String(kpi.v).replace(/[^\d.\-]/g, ""));
+}
+
+function verifyAnalysisResult(result, itemStats, custStats, purStats, scopeLabel){
+  const errors = [];
+  const warnings = [];
+  const checks = [];
+  const prefix = scopeLabel ? scopeLabel + " — " : "";
+
+  const custTbl = result.tables.find(t=>t.name === "거래처분류집계");
+  const itemTbl = result.tables.find(t=>t.name === "품목분류집계");
+  const custAgg = getTableGrandTotal(custTbl, "매출액");
+  const itemAgg = getTableGrandTotal(itemTbl, "매출액");
+  const custCnt = getTableGrandTotal(custTbl, "건수");
+  const itemCnt = getTableGrandTotal(itemTbl, "건수");
+
+  const custAmtOk = amountsMatch(custAgg, custStats.totalAmt);
+  checks.push({
+    label: prefix+"거래처분류집계 ↔ CSV",
+    passed: custAmtOk,
+    detail: custAmtOk
+      ? fmt(custAgg)+"원 일치"
+      : "집계 "+fmt(custAgg)+"원 ≠ CSV "+fmt(custStats.totalAmt)+"원"
+  });
+  if(!custAmtOk){
+    errors.push(prefix+"거래처 분류 집계금액이 CSV 합계와 다릅니다.");
+  }
+
+  const itemAmtOk = amountsMatch(itemAgg, itemStats.totalAmt);
+  checks.push({
+    label: prefix+"품목분류집계 ↔ CSV",
+    passed: itemAmtOk,
+    detail: itemAmtOk
+      ? fmt(itemAgg)+"원 일치"
+      : "집계 "+fmt(itemAgg)+"원 ≠ CSV "+fmt(itemStats.totalAmt)+"원"
+  });
+  if(!itemAmtOk){
+    errors.push(prefix+"품목 분류 집계금액이 CSV 합계와 다릅니다.");
+  }
+
+  const crossOk = amountsMatch(custAgg, itemAgg);
+  checks.push({
+    label: prefix+"품목·거래처 집계 총액",
+    passed: crossOk,
+    detail: crossOk
+      ? fmt(custAgg)+"원 일치"
+      : "품목 "+fmt(itemAgg)+"원 / 거래처 "+fmt(custAgg)+"원"
+  });
+  if(!crossOk){
+    errors.push(prefix+"품목·거래처 집계 총액이 서로 다릅니다.");
+  }
+
+  const custCntOk = custCnt === custStats.rowCount;
+  checks.push({
+    label: prefix+"거래처 건수 ↔ CSV",
+    passed: custCntOk,
+    detail: custCntOk
+      ? fmt(custCnt)+"건 일치"
+      : "집계 "+fmt(custCnt)+"건 ≠ CSV "+fmt(custStats.rowCount)+"건"
+  });
+  if(!custCntOk){
+    errors.push(prefix+"거래처 집계 건수가 CSV 행 수와 다릅니다.");
+  }
+
+  const itemCntOk = itemCnt === itemStats.rowCount;
+  checks.push({
+    label: prefix+"품목 건수 ↔ CSV",
+    passed: itemCntOk,
+    detail: itemCntOk
+      ? fmt(itemCnt)+"건 일치"
+      : "집계 "+fmt(itemCnt)+"건 ≠ CSV "+fmt(itemStats.rowCount)+"건"
+  });
+  if(!itemCntOk){
+    errors.push(prefix+"품목 집계 건수가 CSV 행 수와 다릅니다.");
+  }
+
+  if(result.kpis && result.kpis.length >= 2){
+    const kpiCust = kpiAmount(result.kpis[0]);
+    const kpiItem = kpiAmount(result.kpis[1]);
+    const kpiCustOk = amountsMatch(kpiCust, custAgg);
+    const kpiItemOk = amountsMatch(kpiItem, itemAgg);
+    if(!kpiCustOk) errors.push(prefix+"화면 KPI 거래처 총매출이 집계표와 다릅니다.");
+    if(!kpiItemOk) errors.push(prefix+"화면 KPI 품목 총매출이 집계표와 다릅니다.");
+    checks.push({
+      label: prefix+"KPI ↔ 집계표",
+      passed: kpiCustOk && kpiItemOk,
+      detail: (kpiCustOk && kpiItemOk) ? "일치" : "KPI와 집계표 불일치"
+    });
+  }
+
+  if(purStats && purStats.rowCount > 0){
+    const purTbl = result.tables.find(t=>t.name === "구매_거래처별");
+    const purAgg = getTableGrandTotal(purTbl, "구매금액");
+    const purOk = amountsMatch(purAgg, purStats.totalAmt);
+    checks.push({
+      label: prefix+"구매 집계 ↔ CSV",
+      passed: purOk,
+      detail: purOk
+        ? fmt(purAgg)+"원 일치"
+        : "집계 "+fmt(purAgg)+"원 ≠ CSV "+fmt(purStats.totalAmt)+"원"
+    });
+    if(!purOk) errors.push(prefix+"구매 집계금액이 CSV 합계와 다릅니다.");
+  }
+
+  return { passed: errors.length === 0, errors, warnings, checks };
+}
+
+function logVerificationResult(title, vr){
+  logStatus("\n[검증] "+title);
+  for(const c of (vr.checks || [])){
+    logStatus("  "+(c.passed ? "✓" : "✗")+" "+c.label+(c.detail ? ": "+c.detail : ""));
+  }
+  for(const w of (vr.warnings || [])) logStatus("  ⚠ "+w);
+  for(const e of (vr.errors || [])) logStatus("  ✗ "+e);
+}
+
+function assertVerification(vr, title){
+  logVerificationResult(title, vr);
+  if(vr.passed) return true;
+  const msg = (vr.errors || []).join("\n");
+  alert(title+" 검증에 실패했습니다. 분석을 중단합니다.\n\n"+msg);
+  return false;
+}
+
+/* 업로드 파일 인코딩 자동 판별(UTF-8 우선, 실패 시 EUC-KR/CP949) */
 function readFileSmart(file){
   return file.arrayBuffer().then(buf=>{
     const bytes = new Uint8Array(buf);
@@ -209,21 +1212,29 @@ function parseCSV(text){
 }
 
 function colIndex(headers, exacts, contains){
+  const norm = s => String(s).replace(/^\ufeff/, "").trim();
+  const hs = headers.map(norm);
   for(const n of exacts){
-    const idx = headers.indexOf(n);
+    const idx = hs.indexOf(n);
     if(idx>=0) return idx;
   }
   if(contains){
-    for(let i=0;i<headers.length;i++){
-      for(const c of contains){ if(headers[i].includes(c)) return i; }
+    for(let i=0;i<hs.length;i++){
+      for(const c of contains){ if(hs[i].includes(c)) return i; }
     }
   }
   return -1;
 }
 function findHeaderRow(rows, keyCols){
-  for(let i=0;i<Math.min(rows.length,6);i++){
-    const r = rows[i].map(x=>String(x).trim());
-    for(const k of keyCols){ if(r.includes(k)) return i; }
+  const norm = s => String(s).replace(/^\ufeff/, "").trim();
+  for(let i=0;i<Math.min(rows.length,20);i++){
+    const r = rows[i].map(norm);
+    for(const k of keyCols){
+      if(r.includes(k)) return i;
+      for(const cell of r){
+        if(cell.includes(k)) return i;
+      }
+    }
   }
   return 0;
 }
@@ -245,8 +1256,8 @@ function aggregate(records){
   const map = new Map();
   for(const r of records){
     let o = map.get(r.key);
-    if(!o){ o={key:r.key, �����:0, ����:0, �Ǽ�:0}; map.set(r.key,o); }
-    o.����� += r.amount; o.���� += r.qty; o.�Ǽ� += 1;
+    if(!o){ o={key:r.key, 매출액:0, 수량:0, 건수:0}; map.set(r.key,o); }
+    o.매출액 += r.amount; o.수량 += r.qty; o.건수 += 1;
   }
   return [...map.values()];
 }
@@ -255,7 +1266,7 @@ function makeTable(name, columns, numeric, dataRows, addTotal){
   const rows = dataRows.map(r=>r.slice());
   if(addTotal){
     const total = columns.map(c => numeric.includes(c) ? 0 : "");
-    total[0] = "���հ�";
+    total[0] = "총합계";
     for(let ci=0; ci<columns.length; ci++){
       if(numeric.includes(columns[ci])){
         let s=0; for(const r of rows){ s += (typeof r[ci]==="number"? r[ci]:0); }
@@ -267,141 +1278,305 @@ function makeTable(name, columns, numeric, dataRows, addTotal){
   return {name, columns, numeric, rows};
 }
 
+function buildAnalysis(custDs, itemDs, purDs){
+  const custMap = currentCustMap;
+  const itemMap = currentItemMap;
+  const cRows = custDs.rows;
+  const cH = custDs.h;
+  const cHead = custDs.head;
+  const cCode = colIndex(cHead, ["거래처코드"], ["거래처코드"]);
+  const cQty  = colIndex(cHead, ["수량"]);
+  const cAmt  = colIndex(cHead, ["공급가액"], null);
+  const cSum  = colIndex(cHead, ["합계"]);
+  const cAmtCol = cAmt>=0 ? cAmt : cSum;
+  if(cCode<0) throw new Error("거래처별 파일에서 '거래처코드' 열을 찾지 못했습니다.");
+
+  const custRecords = [];
+  for(let i=cH+1;i<cRows.length;i++){
+    const r = cRows[i];
+    if(!r || cCode>=r.length || isSummaryRow(r)) continue;
+    const code = String(r[cCode]||"").trim();
+    if(!code) continue;
+    const k = firstLetter(code);
+    custRecords.push({
+      key: normalizeReportDimKey("거래처분류집계",
+        custMap[k] || (k? "미분류("+k+")":"미분류")),
+      amount: num(r[cAmtCol]), qty: num(r[cQty])
+    });
+  }
+  const custAgg = aggregate(custRecords).sort((a,b)=>b.매출액-a.매출액);
+
+  const iRows = itemDs.rows;
+  const iH = itemDs.h;
+  const iHead = itemDs.head;
+  const iCode = colIndex(iHead, ["품목코드","상품코드"], ["품목코드","상품코드"]);
+  const iName = colIndex(iHead, ["품목명(규격)"], ["품목명"]);
+  const iQty  = colIndex(iHead, ["수량"]);
+  const iAmt  = colIndex(iHead, ["공급가액"], null);
+  const iSum  = colIndex(iHead, ["합계"]);
+  const iDate = colIndex(iHead, ["일자-No.","일자-No","일자","일별","전표별"], ["일자","일별","전표"]);
+  const iCust = colIndex(iHead, ["거래처명","거래처별"], ["거래처명","거래처별"]);
+  const iAmtCol = iAmt>=0 ? iAmt : iSum;
+  if(iCode<0) throw new Error("품목 파일에서 '품목코드' 또는 '상품코드' 열을 찾지 못했습니다.");
+
+  const itemRecords = [];
+  const directRows = [];
+  for(let i=iH+1;i<iRows.length;i++){
+    const r = iRows[i];
+    if(!r || iCode>=r.length || isSummaryRow(r)) continue;
+    const code = String(r[iCode]||"").trim();
+    if(!code) continue;
+    const name = iName>=0 ? String(r[iName]||"") : "";
+    const amount = num(r[iAmtCol]);
+    const qty = num(r[iQty]);
+    const k = firstLetter(code);
+    const cat = itemMap[k] || (k? "미분류("+k+")":"미분류");
+    itemRecords.push({key:cat, amount, qty});
+
+    if(code.includes("직납")){
+      const brand = findBrand(name);
+      if(brand){
+        directRows.push({
+          date: iDate>=0? String(r[iDate]||""):"",
+          code, name,
+          cust: iCust>=0? String(r[iCust]||""):"",
+          brand, cat, qty, amount
+        });
+      }
+    }
+  }
+  const itemAgg = aggregate(itemRecords).sort((a,b)=>b.매출액-a.매출액);
+
+  const comboMap = new Map();
+  for(const d of directRows){
+    const key = d.brand + "||" + d.cat;
+    let o = comboMap.get(key);
+    if(!o){ o={brand:d.brand, cat:d.cat, 수량:0, 매출액:0, 건수:0}; comboMap.set(key,o); }
+    o.수량 += d.qty; o.매출액 += d.amount; o.건수 += 1;
+  }
+  const combo = [...comboMap.values()].sort((a,b)=>
+    a.brand<b.brand ? -1 : a.brand>b.brand ? 1 : b.매출액-a.매출액);
+
+  const tables = [
+    makeTable("거래처분류집계",
+      ["거래처분류명","매출액","건수","수량"], ["매출액","건수","수량"],
+      custAgg.map(o=>[o.key,o.매출액,o.건수,o.수량]), true),
+    makeTable("품목분류집계",
+      ["품목분류명","매출액","건수","수량"], ["매출액","건수","수량"],
+      itemAgg.map(o=>[o.key,o.매출액,o.건수,o.수량]), true),
+    makeTable("직납_품목분류",
+      ["브랜드","품목분류명","수량","매출액","건수"], ["수량","매출액","건수"],
+      combo.map(o=>[o.brand,o.cat,o.수량,o.매출액,o.건수]), true),
+    makeTable("직납_상세",
+      ["일자-No.","품목코드","품목명","거래처명","브랜드","품목분류명","수량","매출액"],
+      ["수량","매출액"],
+      directRows.map(d=>[d.date,d.code,d.name,d.cust,d.brand,d.cat,d.qty,d.amount]), true)
+  ];
+
+  const totalCust = custAgg.reduce((s,o)=>s+o.매출액,0);
+  const totalItem = itemAgg.reduce((s,o)=>s+o.매출액,0);
+  const totalDirect = directRows.reduce((s,d)=>s+d.amount,0);
+  const totalDirectQty = directRows.reduce((s,d)=>s+d.qty,0);
+
+  const kpis = [
+    {k:"거래처 기준 총매출", v:fmt(totalCust)+" 원"},
+    {k:"품목 기준 총매출", v:fmt(totalItem)+" 원"},
+    {k:"직납 매출액", v:fmt(totalDirect)+" 원"},
+    {k:"직납 수량 / 건수", v:fmt(totalDirectQty)+" / "+directRows.length+"건"}
+  ];
+
+  if(purDs && csvHasDataRows(purDs)){
+    analyzePurchaseRows(purDs, tables, kpis);
+  }
+
+  return {tables, kpis};
+}
+
+function applyAnalysisResult(result, month){
+  resultTables = result.tables;
+  currentKpis = result.kpis;
+  viewingMonth = month || null;
+  viewingYear = null;
+  if(month) $("monthInput").value = month;
+  renderKPIs(currentKpis);
+  renderTables(resultTables);
+  updateViewLabel();
+  showAppPage("pageData", { showResults: true });
+  updateXlsBtnState();
+}
+
 async function runAnalysis(){
   clearStatus();
-  const itemFile = $("itemFile").files[0];
-  const custFile = $("custFile").files[0];
-  if(!itemFile){ alert("(1) ǰ�� �Ǹ���Ȳ ������ �ҷ�������."); return; }
-  if(!custFile){ alert("(2) �ŷ�ó�� �Ǹ���Ȳ ������ �ҷ�������."); return; }
+  const salesFile = $("salesFile").files[0];
+  const purchaseFile = $("purchaseFile").files[0];
+  if(!salesFile){ alert("(1) 품목·거래처별 판매현황 CSV를 불러오세요."); return; }
 
   $("runBtn").disabled = true;
   try{
-    logStatus("�м��� �����մϴ�...");
-    const itemMap = currentItemMap;
-    const custMap = currentCustMap;
+    logStatus("분석을 시작합니다...");
+    const salesText = await readFileSmart(salesFile);
+    const purText = purchaseFile ? await readFileSmart(purchaseFile) : "";
 
-    /* ---- �ŷ�ó�� ---- */
-    logStatus("- �ŷ�ó�� �Ǹ���Ȳ �д� ��...");
-    const cRows = parseCSV(await readFileSmart(custFile));
-    const cH = findHeaderRow(cRows, ["�ŷ�ó�ڵ�"]);
-    const cHead = cRows[cH].map(x=>String(x).trim());
-    const cCode = colIndex(cHead, ["�ŷ�ó�ڵ�"]);
-    const cQty  = colIndex(cHead, ["����"]);
-    const cAmt  = colIndex(cHead, ["���ް���"], null);
-    const cSum  = colIndex(cHead, ["�հ�"]);
-    const cAmtCol = cAmt>=0 ? cAmt : cSum;
-    if(cCode<0) throw new Error("�ŷ�ó�� ���Ͽ��� '�ŷ�ó�ڵ�' �÷��� ã�� ���߽��ϴ�.");
+    const salesDs = parseSalesCsvDataset(salesText);
+    const itemDs = salesDs;
+    const custDs = salesDs;
+    const purDs = purText ? parseCsvDataset(purText, ["거래처코드","월별"]) : null;
 
-    const custRecords = [];
-    for(let i=cH+1;i<cRows.length;i++){
-      const r = cRows[i];
-      if(!r || cCode>=r.length) continue;
-      const code = String(r[cCode]||"").trim();
-      if(!code) continue;
-      const k = firstLetter(code);
-      custRecords.push({
-        key: custMap[k] || (k? "�̺з�("+k+")":"�̺з�"),
-        amount: num(r[cAmtCol]), qty: num(r[cQty])
-      });
-    }
-    const custAgg = aggregate(custRecords).sort((a,b)=>b.�����-a.�����);
+    logStatus("CSV 원본 검증 중...");
+    const csvVerify = verifyCsvDatasets(itemDs, custDs, purDs);
+    if(!assertVerification(csvVerify, "입력 CSV")) return;
 
-    /* ---- ǰ�� ---- */
-    logStatus("- ǰ�� �Ǹ���Ȳ �д� ��...");
-    const iRows = parseCSV(await readFileSmart(itemFile));
-    const iH = findHeaderRow(iRows, ["ǰ���ڵ�"]);
-    const iHead = iRows[iH].map(x=>String(x).trim());
-    const iCode = colIndex(iHead, ["ǰ���ڵ�"]);
-    const iName = colIndex(iHead, ["ǰ���(�԰�)"], ["ǰ���"]);
-    const iQty  = colIndex(iHead, ["����"]);
-    const iAmt  = colIndex(iHead, ["���ް���"], null);
-    const iSum  = colIndex(iHead, ["�հ�"]);
-    const iDate = colIndex(iHead, ["����-No.","����-No"], ["����"]);
-    const iCust = colIndex(iHead, ["�ŷ�ó��"]);
-    const iAmtCol = iAmt>=0 ? iAmt : iSum;
-    if(iCode<0) throw new Error("ǰ�� ���Ͽ��� 'ǰ���ڵ�' �÷��� ã�� ���߽��ϴ�.");
+    const months = collectAllMonths(itemDs, custDs, purDs);
+    const undatedOk = months.length <= 1;
 
-    const itemRecords = [];
-    const directRows = [];
-    for(let i=iH+1;i<iRows.length;i++){
-      const r = iRows[i];
-      if(!r || iCode>=r.length) continue;
-      const code = String(r[iCode]||"").trim();
-      if(!code) continue;
-      const name = iName>=0 ? String(r[iName]||"") : "";
-      const amount = num(r[iAmtCol]);
-      const qty = num(r[iQty]);
-      const k = firstLetter(code);
-      const cat = itemMap[k] || (k? "�̺з�("+k+")":"�̺з�");
-      itemRecords.push({key:cat, amount, qty});
-
-      if(code.includes("����")){
-        const brand = findBrand(name);
-        if(brand){
-          directRows.push({
-            date: iDate>=0? String(r[iDate]||""):"",
-            code, name,
-            cust: iCust>=0? String(r[iCust]||""):"",
-            brand, cat, qty, amount
-          });
+    if(months.length <= 1){
+      const month = months[0] || detectMonth(salesText) || $("monthInput").value;
+      if(!months.length){
+        const dataRows = [itemDs, custDs, purDs].reduce((n,ds)=>n+(ds?Math.max(0,ds.rows.length-ds.h-1):0),0);
+        const hasMonthCol = [itemDs, custDs, purDs].some(datasetHasMonthColumn);
+        if(dataRows > 80 && !hasMonthCol){
+          if(!confirm("CSV에서 '월별'·'일자' 열을 찾지 못했습니다.\n"
+            +"여러 달 데이터가 한 달("+monthLabel(month || $("monthInput").value || "기준월")+")로 합산·저장될 수 있습니다.\n\n"
+            +"계속 분석할까요?")){
+            return;
+          }
+        }else if(dataRows > 80 && hasMonthCol){
+          logStatus("주의: 월별 값을 읽지 못했습니다. CSV 인코딩(UTF-8)·열 이름을 확인하세요.");
         }
       }
+      logStatus(months.length ? "- 1개월 데이터 분석" : "- 월 정보 없음 · 전체 합산 분석");
+      const result = buildAnalysis(custDs, itemDs, purDs);
+      const aggVerify = verifyAnalysisResult(
+        result, csvVerify.itemStats, csvVerify.custStats, csvVerify.purStats, ""
+      );
+      if(!assertVerification(aggVerify, "집계 결과")) return;
+      applyAnalysisResult(result, month || null);
+      if(month){
+        saveMonthData(month, {overwrite:true, silent:false});
+        logStatus("완료! "+monthLabel(month)+" 데이터를 분석·저장했습니다.");
+      }else{
+        logStatus("완료! [기준월]을 선택한 뒤 [이 달 데이터 저장]을 눌러 주세요.");
+      }
+      persistSession();
+    }else{
+      logStatus("- "+months.length+"개월 감지: "+months.map(monthLabel).join(", "));
+      const saved = [];
+      for(const month of months){
+        const iF = filterDatasetForMonth(itemDs, month, undatedOk);
+        const cF = filterDatasetForMonth(custDs, month, undatedOk);
+        const pF = purDs ? filterDatasetForMonth(purDs, month, undatedOk) : null;
+        if(!iF || !cF || !csvHasDataRows(iF) || !csvHasDataRows(cF)){
+          logStatus("  · "+monthLabel(month)+": 필수 데이터 없음 — 건너뜀");
+          continue;
+        }
+        const monthStats = compareSalesStatsPair(
+          summarizeSalesDataset(iF, "item"),
+          summarizeSalesDataset(cF, "cust"),
+          monthLabel(month)
+        );
+        if(!monthStats.passed){
+          logVerificationResult(monthLabel(month)+" CSV", monthStats);
+          throw new Error(monthLabel(month)+" 월별 CSV 검증 실패: "+monthStats.errors.join(" "));
+        }
+        const result = buildAnalysis(cF, iF, pF);
+        const aggVerify = verifyAnalysisResult(
+          result, monthStats.itemStats, monthStats.custStats,
+          pF && csvHasDataRows(pF) ? summarizeSalesDataset(pF, "cust") : null,
+          monthLabel(month)
+        );
+        if(!assertVerification(aggVerify, monthLabel(month)+" 집계 결과")) return;
+        resultTables = result.tables;
+        currentKpis = result.kpis;
+        saveMonthData(month, {overwrite:true, silent:true, deferPersist:true});
+        saved.push(month);
+        logStatus("  · "+monthLabel(month)+" 분석·저장 (거래처 "+result.kpis[0].v+")");
+      }
+      if(!saved.length) throw new Error("월별로 나눌 수 있는 데이터가 없습니다. CSV에 '월별' 또는 '일자' 열이 있는지 확인하세요.");
+      loadMonth(saved[saved.length-1]);
+      logStatus("완료! "+saved.length+"개월 자동 저장. 위에서 월을 선택해 결과를 확인하세요.");
+      persistSession();
     }
-    const itemAgg = aggregate(itemRecords).sort((a,b)=>b.�����-a.�����);
-
-    /* ---- ���� ���� (�귣�� + ǰ��з� ����) ---- */
-    const comboMap = new Map();
-    for(const d of directRows){
-      const key = d.brand + "||" + d.cat;
-      let o = comboMap.get(key);
-      if(!o){ o={brand:d.brand, cat:d.cat, ����:0, �����:0, �Ǽ�:0}; comboMap.set(key,o); }
-      o.���� += d.qty; o.����� += d.amount; o.�Ǽ� += 1;
-    }
-    const combo = [...comboMap.values()].sort((a,b)=>
-      a.brand<b.brand ? -1 : a.brand>b.brand ? 1 : b.�����-a.�����);
-
-    /* ---- ǥ ---- */
-    const tCust = makeTable("�ŷ�ó�з���",
-      ["�ŷ�ó�з���","�����","�Ǽ�","����"], ["�����","�Ǽ�","����"],
-      custAgg.map(o=>[o.key,o.�����,o.�Ǽ�,o.����]), true);
-    const tItem = makeTable("ǰ��з���",
-      ["ǰ��з���","�����","�Ǽ�","����"], ["�����","�Ǽ�","����"],
-      itemAgg.map(o=>[o.key,o.�����,o.�Ǽ�,o.����]), true);
-    const tDirect = makeTable("����_����",
-      ["�귣��","ǰ��з���","����","�����","�Ǽ�"], ["����","�����","�Ǽ�"],
-      combo.map(o=>[o.brand,o.cat,o.����,o.�����,o.�Ǽ�]), true);
-    const tDDetail = makeTable("����_��",
-      ["����-No.","ǰ���ڵ�","ǰ���","�ŷ�ó��","�귣��","ǰ��з���","����","�����"],
-      ["����","�����"],
-      directRows.map(d=>[d.date,d.code,d.name,d.cust,d.brand,d.cat,d.qty,d.amount]), true);
-
-    resultTables = [tCust, tItem, tDirect, tDDetail];
-
-    const totalCust = custAgg.reduce((s,o)=>s+o.�����,0);
-    const totalItem = itemAgg.reduce((s,o)=>s+o.�����,0);
-    const totalDirect = directRows.reduce((s,d)=>s+d.amount,0);
-    const totalDirectQty = directRows.reduce((s,d)=>s+d.qty,0);
-
-    renderKPIs([
-      {k:"�ŷ�ó ���� �Ѹ���", v:fmt(totalCust)+" ��"},
-      {k:"ǰ�� ���� �Ѹ���", v:fmt(totalItem)+" ��"},
-      {k:"���� ����", v:fmt(totalDirect)+" ��"},
-      {k:"���� ���� / �Ǽ�", v:fmt(totalDirectQty)+" / "+directRows.length+"��"}
-    ]);
-    renderTables(resultTables);
-
-    logStatus("- ���� ǰ�� "+directRows.length+"��, ���� "+fmt(totalDirectQty)
-              +", ���� "+fmt(totalDirect)+"��");
-    logStatus("�Ϸ�! ������ ����� Ȯ���ϰ� '���� �ٿ�ε�'�� �����ϼ���.");
-
-    $("results").classList.remove("hide");
-    $("xlsBtn").disabled = false;
   }catch(err){
-    logStatus("[����] " + (err && err.message ? err.message : err));
-    alert("�м� �� ������ �߻��߽��ϴ�:\n\n" + (err && err.message ? err.message : err));
+    logStatus("[오류] " + (err && err.message ? err.message : err));
+    alert("분석 중 오류가 발생했습니다:\n\n" + (err && err.message ? err.message : err));
   }finally{
     $("runBtn").disabled = false;
   }
+}
+
+/* ===== 거래처별 구매현황 : 거래처코드 순 정렬 + 지역분류 집계 ===== */
+function analyzePurchaseRows(purDs, tables, kpis){
+  const rows = purDs.rows;
+  const h = purDs.h;
+  const head = purDs.head;
+  const cCode = colIndex(head, ["거래처코드"], ["거래처코드"]);
+  const cName = colIndex(head, ["거래처명","거래처별"], ["거래처명","거래처별"]);
+  const cQty  = colIndex(head, ["수량"]);
+  const cAmt  = colIndex(head, ["공급가액"], null);
+  const cSum  = colIndex(head, ["합계"]);
+  const amtCol = cSum>=0 ? cSum : cAmt;
+  if(cCode<0) throw new Error("거래처별 구매현황 파일에서 '거래처코드' 열을 찾지 못했습니다.");
+
+  /* 거래처코드 단위 합산 (같은 거래처가 여러 줄이면 합산) */
+  const byCode = new Map();
+  for(let i=h+1;i<rows.length;i++){
+    const r = rows[i];
+    if(!r || cCode>=r.length || isSummaryRow(r)) continue;
+    const code = String(r[cCode]||"").trim();
+    if(!code) continue;
+    let o = byCode.get(code);
+    if(!o){
+      const name = cName>=0 ? displayVendorName(String(r[cName]||"").trim()) : "";
+      o = {code, name: name || code, region:regionOf(code), 구매금액:0, 수량:0};
+      byCode.set(code,o);
+    }
+    o.구매금액 += num(r[amtCol]);
+    o.수량 += num(r[cQty]);
+  }
+  const vendors = [...byCode.values()].sort((a,b)=>{
+    const x=a.code.toLowerCase(), y=b.code.toLowerCase();
+    return x<y ? -1 : x>y ? 1 : 0;
+  });
+
+  const REGION_ORDER = ["경상남도 생산시설","경상남도외 생산시설"];
+  const regMap = new Map();
+  for(const v of vendors){
+    let o = regMap.get(v.region);
+    if(!o){ o={region:v.region, 거래처수:0, 구매금액:0}; regMap.set(v.region,o); }
+    o.거래처수 += 1; o.구매금액 += v.구매금액;
+  }
+  const regions = REGION_ORDER.filter(r=>regMap.has(r)).map(r=>regMap.get(r));
+
+  const regionRank = r => (r==="경상남도외 생산시설" ? 1 : 0);
+  const vendorsForTable = vendors.slice().sort((a,b)=>{
+    const ra=regionRank(a.region), rb=regionRank(b.region);
+    if(ra!==rb) return ra-rb;
+    const x=a.code.toLowerCase(), y=b.code.toLowerCase();
+    return x<y ? -1 : x>y ? 1 : 0;
+  });
+  const tVendor = makeTable("구매_거래처별",
+    ["거래처명","구매금액","수량"], ["구매금액","수량"],
+    vendorsForTable.map(v=>[v.name, v.구매금액, v.수량]), true);
+  tVendor.rowMeta = vendorsForTable.map(v=> v.region==="경상남도외 생산시설" ? "region-out" : "region-gn");
+  tVendor.legend = [
+    {cls:"region-gn", label:"경상남도 생산시설"},
+    {cls:"region-out", label:"경상남도외 생산시설"}
+  ];
+
+  const tRegion = makeTable("구매_지역요약",
+    ["지역분류","거래처수","구매금액"], ["거래처수","구매금액"],
+    regions.map(o=>[o.region, o.거래처수, o.구매금액]), true);
+
+  tables.push(tVendor, tRegion);
+
+  const gn  = regMap.get("경상남도 생산시설");
+  const out = regMap.get("경상남도외 생산시설");
+  const gnAmt = gn?gn.구매금액:0, outAmt = out?out.구매금액:0;
+  kpis.push(
+    {k:"경상남도 구매액", v:fmt(gnAmt)+" 원"},
+    {k:"경상남도외 구매액", v:fmt(outAmt)+" 원"},
+    {k:"총 구매액", v:fmt(gnAmt+outAmt)+" 원"}
+  );
 }
 
 function renderKPIs(items){
@@ -409,41 +1584,133 @@ function renderKPIs(items){
     '<div class="kpi"><div class="k">'+it.k+'</div><div class="v">'+it.v+'</div></div>'
   ).join("");
 }
+function isPivotTable(t){
+  if(!t || !t.columns || t.columns.length < 4) return false;
+  if(t.columns[t.columns.length-1] !== "합계") return false;
+  return t.columns.slice(1, -1).some(c=>String(c).indexOf("월") >= 0);
+}
+function pivotColClass(ci, colCount){
+  if(ci === 0) return "firstcol";
+  if(ci === colCount - 1) return "col-sum num";
+  return "month-col num";
+}
+function setResultsLayout(wide){
+  const main = document.querySelector("main");
+  if(main) main.classList.toggle("wide-results", !!wide);
+}
 function renderTables(tables){
   const tb = $("tabbtns"); tb.innerHTML="";
   const wrap = $("tables"); wrap.innerHTML="";
+  const anyPivot = tables.some(isPivotTable);
+  setResultsLayout(anyPivot);
+  if(anyPivot){
+    const hint = document.createElement("p");
+    hint.className = "pivot-hint";
+    hint.textContent = "월별 금액은 만·억 단위로 표시됩니다. 셀에 마우스를 올리면 전체 금액을 볼 수 있습니다.";
+    wrap.appendChild(hint);
+  }
   tables.forEach((t,idx)=>{
     const btn = document.createElement("button");
     btn.textContent = t.name;
+    btn.title = t.name;
     btn.className = idx===0 ? "active":"";
     btn.onclick = ()=>{
       [...tb.children].forEach(b=>b.classList.remove("active"));
       btn.classList.add("active");
-      [...wrap.children].forEach(d=>d.classList.add("hide"));
+      [...wrap.children].forEach(d=>{
+        if(d.classList && d.classList.contains("tablewrap")) d.classList.add("hide");
+      });
       $("tbl_"+idx).classList.remove("hide");
     };
     tb.appendChild(btn);
 
+    const pivot = isPivotTable(t);
     const div = document.createElement("div");
     div.id = "tbl_"+idx;
-    div.className = "tablewrap" + (idx===0?"":" hide");
+    div.className = "tablewrap" + (pivot ? " pivot-view" : "") + (idx===0?"":" hide");
     div.innerHTML = tableHTML(t);
     wrap.appendChild(div);
   });
+  requestAnimationFrame(()=>fitTablesIn($("results")));
+}
+function shrinkTableToFitWrap(wrap){
+  const tbl = wrap.querySelector("table");
+  if(!tbl || !wrap.clientWidth) return;
+  if(!tbl.dataset.fitBaseFs){
+    tbl.dataset.fitBaseFs = getComputedStyle(tbl).fontSize || "12px";
+  }
+  let fs = parseFloat(tbl.dataset.fitBaseFs) || 12;
+  tbl.style.width = "100%";
+  tbl.style.tableLayout = "auto";
+  tbl.style.fontSize = tbl.dataset.fitBaseFs;
+  let guard = 0;
+  while(tbl.scrollWidth > wrap.clientWidth + 2 && fs > 6.5 && guard < 16){
+    fs -= 0.5;
+    tbl.style.fontSize = fs + "px";
+    guard++;
+  }
+}
+function fitChartsIn(root){
+  if(!root) return;
+  root.querySelectorAll(".chart-scroll").forEach(el=>{
+    el.style.overflow = "visible";
+    const inner = el.firstElementChild;
+    if(inner){
+      inner.style.width = "100%";
+      inner.style.maxWidth = "100%";
+    }
+  });
+  root.querySelectorAll("svg.chart").forEach(svg=>{
+    svg.style.width = "100%";
+    svg.style.height = "auto";
+    svg.style.maxWidth = "100%";
+    svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  });
+}
+function fitTablesIn(root){
+  if(!root) return;
+  root.querySelectorAll(".tablewrap").forEach(wrap=>{
+    wrap.style.maxHeight = "none";
+    wrap.style.overflow = "visible";
+    shrinkTableToFitWrap(wrap);
+  });
+}
+function fitReportScreenLayout(){
+  const report = $("report");
+  if(!report) return;
+  fitChartsIn(report);
+  fitTablesIn(report);
 }
 function tableHTML(t){
-  let h = "<table><thead><tr>";
-  t.columns.forEach(c=>{
-    const cls = t.numeric.includes(c) ? "num":"";
-    h += '<th class="'+cls+'">'+escapeHTML(c)+'</th>';
+  const pivot = isPivotTable(t);
+  const colN = t.columns.length;
+  let h = "";
+  if(t.legend && t.legend.length){
+    h += '<div class="legend">';
+    t.legend.forEach(l=>{
+      h += '<span class="legend-item"><span class="legend-box '+l.cls+'"></span>'+escapeHTML(l.label)+'</span>';
+    });
+    h += '</div>';
+  }
+  h += '<table class="'+(pivot?"pivot-table":"")+'"><thead><tr>';
+  t.columns.forEach((c,ci)=>{
+    const cls = pivot ? pivotColClass(ci, colN)
+      : ((t.numeric.includes(c) ? "num":"") + (ci===0?" firstcol":""));
+    h += '<th class="'+cls.trim()+'">'+escapeHTML(c)+'</th>';
   });
   h += "</tr></thead><tbody>";
-  t.rows.forEach(row=>{
-    const isTotal = row[0]==="���հ�";
-    h += '<tr class="'+(isTotal?"total":"")+'">';
+  t.rows.forEach((row,ri)=>{
+    const isTotal = row[0]==="총합계";
+    const rcls = (isTotal?"total":"") + (t.rowMeta && t.rowMeta[ri] ? " "+t.rowMeta[ri] : "");
+    h += '<tr class="'+rcls.trim()+'">';
     row.forEach((v,ci)=>{
       const isNum = t.numeric.includes(t.columns[ci]) && typeof v==="number";
-      h += '<td class="'+(isNum?"num":"")+'">'+(isNum?fmt(v):escapeHTML(v==null?"":String(v)))+'</td>';
+      const isEmpty = pivot && ci > 0 && ci < colN - 1 && (v === "" || v == null);
+      let cls = pivot ? pivotColClass(ci, colN)
+        : ((isNum?"num":"") + (ci===0?" firstcol":""));
+      if(isEmpty) cls += " empty";
+      const cell = isNum ? fmt(v) : escapeHTML(v==null?"":String(v));
+      h += '<td class="'+cls.trim()+'">'+cell+'</td>';
     });
     h += "</tr>";
   });
@@ -455,45 +1722,371 @@ function escapeHTML(s){
     ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
 
-/* ===== ����(���� ��Ʈ) �ٿ�ε� : SpreadsheetML(.xls) ===== */
+/* ===== 엑셀(여러 시트) 다운로드 : SpreadsheetML(.xls) ===== */
 function escapeXML(s){
   return String(s).replace(/[&<>"']/g, c =>
     ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&apos;"}[c]));
 }
-function exportExcel(){
-  if(!resultTables){ alert("���� �м��� �����ϼ���."); return; }
+function sanitizeSheetName(name){
+  let s = String(name).replace(/[\\\/\?\*\[\]:]/g," ").trim();
+  if(s.length>31) s = s.slice(0,31);
+  return s || "Sheet";
+}
+function uniqueSheetName(base, used){
+  let s = sanitizeSheetName(base);
+  if(!used.has(s)){ used.add(s); return s; }
+  for(let n=2; n<100; n++){
+    const tryName = sanitizeSheetName(base.slice(0, Math.max(1, 28-String(n).length))+n);
+    if(!used.has(tryName)){ used.add(tryName); return tryName; }
+  }
+  return sanitizeSheetName("Sheet"+Date.now());
+}
+function savedExportFilenameTag(keys){
+  if(!keys.length) return "저장";
+  if(keys.length===1) return keys[0].replace("-","");
+  const [y1,m1] = keys[0].split("-");
+  const [y2,m2] = keys[keys.length-1].split("-");
+  if(y1===y2) return y1+"년"+parseInt(m1,10)+"-"+parseInt(m2,10)+"월";
+  return keys[0]+"_"+keys[keys.length-1];
+}
+function buildSavedMonthsExportTables(monthKeys){
+  return buildPeriodPivotTables(monthKeys).tables;
+}
+function getSavedExportMonthKeys(){
+  const allKeys = Object.keys(getMonths()).sort();
+  if(!allKeys.length) return [];
+  const sel = $("savedYearSel");
+  if(sel && sel.value){
+    const yearKeys = allKeys.filter(k=>k.indexOf(sel.value+"-")===0);
+    if(yearKeys.length) return yearKeys;
+  }
+  return allKeys;
+}
+function excelCellXml(v, colName, numericCols, opts){
+  opts = opts || {};
+  const isNum = numericCols.includes(colName) && typeof v==="number";
+  if(isNum){
+    return '<Cell ss:StyleID="NumComma"><Data ss:Type="Number">'+v+'</Data></Cell>';
+  }
+  const style = opts.header ? ' ss:StyleID="Hdr"' : "";
+  return '<Cell'+style+'><Data ss:Type="String">'+escapeXML(v==null?"":String(v))+'</Data></Cell>';
+}
+function tablesToWorkbookXml(tables){
   let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
   xml += '<?mso-application progid="Excel.Sheet"?>\n';
   xml += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" '
        + 'xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n';
-  for(const t of resultTables){
-    xml += '<Worksheet ss:Name="'+escapeXML(t.name)+'"><Table>\n';
-    xml += '<Row>'+t.columns.map(c=>
-      '<Cell><Data ss:Type="String">'+escapeXML(c)+'</Data></Cell>').join('')+'</Row>\n';
+  xml += '<Styles>\n';
+  xml += '<Style ss:ID="Default" ss:Name="Normal"><Alignment ss:Vertical="Bottom"/></Style>\n';
+  xml += '<Style ss:ID="Hdr"><Font ss:Bold="1"/><Alignment ss:Vertical="Bottom"/></Style>\n';
+  xml += '<Style ss:ID="NumComma"><NumberFormat ss:Format="#,##0"/></Style>\n';
+  xml += '</Styles>\n';
+  for(const t of tables){
+    xml += '<Worksheet ss:Name="'+escapeXML(sanitizeSheetName(t.exportSheetName || t.name))+'"><Table>\n';
+    xml += '<Row>'+t.columns.map(c=>excelCellXml(c, c, [], {header:true})).join('')+'</Row>\n';
     for(const row of t.rows){
-      xml += '<Row>'+row.map((v,ci)=>{
-        const isNum = t.numeric.includes(t.columns[ci]) && typeof v==="number";
-        if(isNum) return '<Cell><Data ss:Type="Number">'+v+'</Data></Cell>';
-        return '<Cell><Data ss:Type="String">'+escapeXML(v==null?"":String(v))+'</Data></Cell>';
-      }).join('')+'</Row>\n';
+      xml += '<Row>'+row.map((v,ci)=>excelCellXml(v, t.columns[ci], t.numeric)).join('')+'</Row>\n';
     }
     xml += '</Table></Worksheet>\n';
   }
   xml += '</Workbook>';
+  return xml;
+}
+const EXPORT_API = "/api/export-excel";
+const EXPORT_HTML_REPORT_API = "/api/export-excel-html-report";
 
+function bareSvgFromChartHtml(html){
+  if(!html) return "";
+  const div = document.createElement("div");
+  div.innerHTML = html;
+  const svg = div.querySelector("svg.chart") || div.querySelector("svg");
+  if(svg) return new XMLSerializer().serializeToString(svg);
+  const m = String(html).match(/<svg[\s\S]*<\/svg>/i);
+  return m ? m[0] : "";
+}
+
+function svgHtmlToPngDataUrl(svgHtml, scale){
+  scale = scale || 2;
+  const bare = bareSvgFromChartHtml(svgHtml);
+  if(!bare) return Promise.resolve(null);
+  const wrap = document.createElement("div");
+  wrap.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0;pointer-events:none;";
+  wrap.innerHTML = bare;
+  document.body.appendChild(wrap);
+  const svg = wrap.querySelector("svg");
+  if(!svg){
+    document.body.removeChild(wrap);
+    return Promise.resolve(null);
+  }
+  const vb = svg.getAttribute("viewBox");
+  let w = parseFloat(svg.getAttribute("width")) || 0;
+  let h = parseFloat(svg.getAttribute("height")) || 0;
+  if(vb){
+    const p = vb.trim().split(/[\s,]+/).map(Number);
+    if(p.length >= 4){
+      if(!w) w = p[2];
+      if(!h) h = p[3];
+    }
+  }
+  if(!w) w = 820;
+  if(!h) h = 420;
+  const outW = Math.round(w * scale);
+  const outH = Math.round(h * scale);
+  svg.setAttribute("width", String(outW));
+  svg.setAttribute("height", String(outH));
+  if(!svg.getAttribute("xmlns")){
+    svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  }
+  const svgStr = new XMLSerializer().serializeToString(svg);
+  const url = URL.createObjectURL(new Blob([svgStr], {type:"image/svg+xml;charset=utf-8"}));
+  return new Promise(resolve=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const canvas = document.createElement("canvas");
+      canvas.width = outW;
+      canvas.height = outH;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, outW, outH);
+      ctx.drawImage(img, 0, 0, outW, outH);
+      URL.revokeObjectURL(url);
+      document.body.removeChild(wrap);
+      resolve({
+        dataUrl: canvas.toDataURL("image/png"),
+        width: Math.round(w),
+        height: Math.round(h)
+      });
+    };
+    img.onerror = ()=>{
+      URL.revokeObjectURL(url);
+      document.body.removeChild(wrap);
+      resolve(null);
+    };
+    img.src = url;
+  });
+}
+
+function reportSheetsPayload(sheets){
+  return sheets.map(t=>({
+    name: t.exportSheetName || t.name,
+    columns: t.columns,
+    rows: t.rows,
+    numeric: t.numeric,
+    charts: (t.charts || []).map(ch=>({
+      title: ch.title,
+      b64: ch.b64 || (ch.png || "").replace(/^data:image\/png;base64,/, ""),
+      width: ch.width,
+      height: ch.height
+    }))
+  }));
+}
+
+async function downloadExcelReportHtml(sheets, filenameTag){
   const now = new Date();
   const p = n => String(n).padStart(2,"0");
   const stamp = now.getFullYear()+p(now.getMonth()+1)+p(now.getDate())
               +"_"+p(now.getHours())+p(now.getMinutes())+p(now.getSeconds());
-  const blob = new Blob(["\uFEFF"+xml], {type:"application/vnd.ms-excel;charset=utf-8"});
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "����м����_"+stamp+".xls";
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(a.href);
+  const filename = "매출분석결과_"+filenameTag+"_"+stamp+".xls";
+  const payload = {
+    filename,
+    sheetTitle: "보고서",
+    sheets: reportSheetsPayload(sheets)
+  };
+  try{
+    const r = await fetch(EXPORT_HTML_REPORT_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json;charset=utf-8" },
+      body: JSON.stringify(payload)
+    });
+    const j = await r.json().catch(()=>({}));
+    if(r.ok && j.ok){
+      return { ok: true, path: j.path, folder: j.folder, filesDir: j.filesDir, html: true };
+    }
+    throw new Error(j.error || "엑셀 저장 실패");
+  }catch(err){
+    alert("엑셀 저장 실패: "+err.message
+      + "\n\n앱을 run_app.bat 으로 실행했는지 확인해 주세요.");
+    return { ok: false, error: err.message };
+  }
 }
 
-/* ===== ������ ���� �ҷ����� ǥ�� ===== */
+async function downloadExcelWorkbook(tables, filenameTag){
+  const now = new Date();
+  const p = n => String(n).padStart(2,"0");
+  const stamp = now.getFullYear()+p(now.getMonth()+1)+p(now.getDate())
+              +"_"+p(now.getHours())+p(now.getMinutes())+p(now.getSeconds());
+  const filename = "매출분석결과_"+filenameTag+"_"+stamp+".xls";
+  const content = "\uFEFF"+tablesToWorkbookXml(tables);
+  try{
+    const r = await fetch(EXPORT_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json;charset=utf-8" },
+      body: JSON.stringify({ filename, content })
+    });
+    if(r.ok){
+      const j = await r.json();
+      return { ok: true, path: j.path, folder: j.folder };
+    }
+  }catch(e){}
+  const blob = new Blob([content], {type:"application/vnd.ms-excel;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+  return { ok: true, fallback: true };
+}
+function updateXlsBtnState(){
+  const btn = $("xlsBtn");
+  if(!btn) return;
+  btn.disabled = !(resultTables || Object.keys(getMonths()).length);
+}
+async function exportExcel(){
+  let tables, tag, statusMsg;
+  if(resultTables){
+    tables = resultTables;
+    tag = viewingYear ? ("연간_"+viewingYear)
+        : (viewingMonth ? viewingMonth.replace("-","") : "분석결과");
+    statusMsg = viewingYear ? (viewingYear+"년 연간 보기")
+      : (viewingMonth ? monthLabel(viewingMonth)+" 저장 데이터" : "현재 분석 결과");
+  }else{
+    const keys = getSavedExportMonthKeys();
+    if(!keys.length){
+      alert("다운로드할 데이터가 없습니다.\n분석을 실행하거나 [이 달 데이터 저장]으로 데이터를 쌓아 주세요.");
+      return;
+    }
+    tables = buildSavedMonthsExportTables(keys);
+    tag = "저장_"+savedExportFilenameTag(keys);
+    const sel = $("savedYearSel");
+    const yearHint = sel && sel.value && keys.every(k=>k.indexOf(sel.value+"-")===0)
+      ? sel.value+"년 " : "";
+    statusMsg = yearHint+"저장 "+keys.length+"개월 ("+monthLabel(keys[0])+"~"+monthLabel(keys[keys.length-1])+")";
+  }
+  if(!tables.length){ alert("내보낼 표가 없습니다."); return; }
+  const res = await downloadExcelWorkbook(tables, tag);
+  let msg = statusMsg+" — 엑셀 "+tables.length+"개 시트 다운로드";
+  if(res.folder) msg += " (다운로드 폴더 열림)";
+  else if(res.fallback) msg += " (브라우저 저장)";
+  logStatus(msg);
+}
+
+/* ===== 세션 저장 (CSV + 월별 데이터 → 프로그램 폴더) ===== */
+function setFileFromText(inputId, name, text){
+  const inp = $(inputId);
+  if(!inp) return;
+  const blob = new Blob([text], {type:"text/csv;charset=utf-8"});
+  const file = new File([blob], name || "data.csv", {type:"text/csv"});
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  inp.files = dt.files;
+  const cacheKey = csvCacheKey(inputId);
+  if(cacheKey) sessionFileCache[cacheKey] = { name: name || "data.csv", text };
+  updateName(inputId);
+}
+
+async function persistSession(opts){
+  opts = opts || {};
+  try{
+    syncMapsFromStores();
+    const payload = {
+      months: getMonths(),
+      itemMap: itemCategoryStore,
+      custMap: custCategoryStore,
+      savedAt: new Date().toISOString()
+    };
+    const clearKeys = opts.clearKeys || [];
+
+    for(const [inputId, cacheKey] of [["salesFile","sales"],["purchaseFile","purchase"]]){
+      if(clearKeys.includes(cacheKey)) continue;
+      const f = $(inputId).files[0];
+      if(f){
+        const cached = sessionFileCache[cacheKey];
+        if(!cached || cached.name !== f.name){
+          sessionFileCache[cacheKey] = { name: f.name, text: await readFileSmart(f) };
+        }
+      }
+    }
+
+    if(clearKeys.includes("sales")) payload.sales = { clear: true };
+    else if(sessionFileCache.sales) payload.sales = sessionFileCache.sales;
+
+    if(clearKeys.includes("purchase")) payload.purchase = { clear: true };
+    else if(sessionFileCache.purchase) payload.purchase = sessionFileCache.purchase;
+
+    const r = await fetch(SESSION_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json;charset=utf-8" },
+      body: JSON.stringify(payload)
+    });
+    if(!r.ok) throw new Error("save failed");
+    return true;
+  }catch(e){
+    return false;
+  }
+}
+
+function applySessionPayload(data){
+  if(!data || typeof data !== "object") return false;
+  let restored = false;
+  if(data.sales && data.sales.text){
+    sessionFileCache.sales = { name: data.sales.name || "sales.csv", text: data.sales.text };
+    setFileFromText("salesFile", sessionFileCache.sales.name, sessionFileCache.sales.text);
+    restored = true;
+  }else if(data.item && data.item.text){
+    sessionFileCache.sales = { name: data.item.name || "item.csv", text: data.item.text };
+    setFileFromText("salesFile", sessionFileCache.sales.name, sessionFileCache.sales.text);
+    restored = true;
+  }
+  if(data.purchase && data.purchase.text){
+    sessionFileCache.purchase = { name: data.purchase.name || "purchase.csv", text: data.purchase.text };
+    setFileFromText("purchaseFile", sessionFileCache.purchase.name, sessionFileCache.purchase.text);
+    restored = true;
+  }
+  if(data.months && typeof data.months === "object" && Object.keys(data.months).length){
+    setMonths(data.months);
+    restored = true;
+  }
+  if(data.itemMap && typeof data.itemMap === "object" && Object.keys(data.itemMap).length){
+    itemCategoryStore = normalizeCategoryStore(data.itemMap, DEFAULT_ITEM_MAP);
+    safeSet(LS_ITEM, JSON.stringify(itemCategoryStore));
+    syncMapsFromStores();
+    restored = true;
+  }
+  if(data.custMap && typeof data.custMap === "object" && Object.keys(data.custMap).length){
+    custCategoryStore = normalizeCategoryStore(data.custMap, DEFAULT_CUST_MAP);
+    safeSet(LS_CUST, JSON.stringify(custCategoryStore));
+    syncMapsFromStores();
+    restored = true;
+  }
+  return restored;
+}
+
+async function restoreSession(){
+  try{
+    const r = await fetch(SESSION_API);
+    if(!r.ok) return false;
+    const restored = applySessionPayload(await r.json());
+    if(restored) logStatus("이전 CSV·월별 데이터를 복원했습니다. (저장데이터 폴더)");
+    return restored;
+  }catch(e){
+    return false;
+  }
+}
+
+async function loadMonthsFromDisk(){
+  try{
+    const r = await fetch(MONTHS_JSON_URL);
+    if(!r.ok) return false;
+    const months = await r.json();
+    if(!months || typeof months !== "object" || !Object.keys(months).length) return false;
+    setMonths(months);
+    return true;
+  }catch(e){
+    return false;
+  }
+}
+
+/* ===== 선택한 파일 이름 표시 ===== */
 function updateName(id){
   const inp = $(id);
   const span = $("name_"+id);
@@ -501,72 +2094,2633 @@ function updateName(id){
     span.textContent = inp.files[0].name;
     span.classList.add("loaded");
   }else{
-    span.textContent = "���õ� ���� ����";
+    span.textContent = "선택된 파일 없음";
     span.classList.remove("loaded");
   }
 }
 document.querySelectorAll(".load").forEach(btn=>{
-  btn.addEventListener("click", ()=> $(btn.dataset.target).click());
-});
-["itemFile","custFile"].forEach(id=>{
-  $(id).addEventListener("change", ()=>updateName(id));
-});
-document.querySelectorAll(".clear").forEach(btn=>{
-  btn.addEventListener("click", ()=>{
-    const inp = $(btn.dataset.target);
-    inp.value = "";
-    updateName(btn.dataset.target);
-  });
+  btn.addEventListener("click", ()=>{ const t = $(btn.dataset.target); if(t) t.click(); });
 });
 
-/* ===== �з�ǥ(��Ī) : ���� 1ȸ ��� �� �������� ���� ===== */
+async function onCsvFileSelected(inputId){
+  const inp = $(inputId);
+  const newFile = inp.files[0];
+  if(!newFile) return;
+
+  const cacheKey = csvCacheKey(inputId);
+  const label = CSV_FILE_LABELS[inputId] || "CSV";
+  const existing = sessionFileCache[cacheKey];
+
+  if(existing && existing.name){
+    if(!confirm(
+      "이미 불러온 "+label+" 데이터가 있습니다.\n\n"
+      +"기존: "+existing.name+"\n"
+      +"새 파일: "+newFile.name+"\n\n"
+      +"기존 데이터를 삭제하고 새 파일로 교체할까요?"
+    )){
+      setFileFromText(inputId, existing.name, existing.text);
+      return;
+    }
+  }
+
+  try{
+    const text = await readFileSmart(newFile);
+    sessionFileCache[cacheKey] = { name: newFile.name, text };
+    updateName(inputId);
+    renderCategoryPanels();
+    await persistSession();
+    logStatus(label+" CSV를 불러왔습니다: "+newFile.name);
+  }catch(e){
+    alert("파일을 읽지 못했습니다.\n\n"+(e && e.message ? e.message : e));
+    if(existing) setFileFromText(inputId, existing.name, existing.text);
+    else{ inp.value = ""; updateName(inputId); }
+  }
+}
+
+async function onCsvFileClear(inputId){
+  const inp = $(inputId);
+  const cacheKey = csvCacheKey(inputId);
+  const label = CSV_FILE_LABELS[inputId] || "CSV";
+  const existing = sessionFileCache[cacheKey];
+  const hasFile = !!(existing || (inp.files && inp.files[0]));
+
+  if(!hasFile){
+    inp.value = "";
+    updateName(inputId);
+    return;
+  }
+
+  const oldName = existing ? existing.name : (inp.files[0] ? inp.files[0].name : "");
+  if(!confirm(
+    "저장된 "+label+" 데이터를 삭제할까요?\n\n"
+    +(oldName ? "파일: "+oldName+"\n\n" : "")
+    +"삭제하면 다음 실행 시 복원되지 않습니다."
+  )) return;
+
+  sessionFileCache[cacheKey] = null;
+  inp.value = "";
+  updateName(inputId);
+  renderCategoryPanels();
+  await persistSession({ clearKeys: [cacheKey] });
+  logStatus(label+" CSV를 삭제했습니다.");
+}
+
+["salesFile","purchaseFile"].forEach(id=>{
+  $(id).addEventListener("change", ()=>{ onCsvFileSelected(id); });
+});
+document.querySelectorAll(".clear").forEach(btn=>{
+  btn.addEventListener("click", ()=>{ onCsvFileClear(btn.dataset.target); });
+});
+
+/* ===== 분류코드 관리 (실적보고 프로그램과 동일 UI) ===== */
 function safeGet(key){ try{ return localStorage.getItem(key); }catch(e){ return null; } }
 function safeSet(key,val){ try{ localStorage.setItem(key,val); return true; }catch(e){ return false; } }
 function safeDel(key){ try{ localStorage.removeItem(key); }catch(e){} }
 
-function setMapStatus(spanId, stored, count){
-  const s = $(spanId);
-  if(stored){ s.textContent = "����� ��Īǥ ��� �� ("+count+"�� �з�)"; s.classList.add("loaded"); }
-  else{ s.textContent = "�⺻ ���尪 ��� ��"; s.classList.remove("loaded"); }
+function defaultCategoryStore(map){
+  const store = {};
+  for(const [code, name] of Object.entries(map)){
+    store[String(code).toLowerCase()] = { name: String(name), active: true };
+  }
+  return store;
 }
+
+function normalizeCategoryStore(parsed, fallback){
+  const store = {};
+  for(const [code, val] of Object.entries(parsed || {})){
+    const k = String(code).trim().toLowerCase();
+    if(!k) continue;
+    if(typeof val === "string") store[k] = { name: val.trim(), active: true };
+    else if(val && typeof val === "object"){
+      store[k] = { name: String(val.name || "").trim(), active: val.active !== false };
+    }
+  }
+  return Object.keys(store).length ? store : defaultCategoryStore(fallback);
+}
+
+function validateCategoryCode(code){
+  const k = String(code || "").trim().toLowerCase();
+  if(!/^[a-z]$/.test(k)) throw new Error("코드는 영문 소문자 1글자(a~z)만 가능합니다.");
+  return k;
+}
+
+function sortedCategoryCodes(store){
+  return Object.keys(store).sort((a,b)=>a.localeCompare(b));
+}
+
+function syncMapsFromStores(){
+  currentItemMap = {};
+  for(const [code, rec] of Object.entries(itemCategoryStore)){
+    if(rec.active && rec.name) currentItemMap[code] = rec.name;
+  }
+  currentCustMap = {};
+  for(const [code, rec] of Object.entries(custCategoryStore)){
+    if(rec.active && rec.name) currentCustMap[code] = rec.name;
+  }
+}
+
+function persistCategoryStores(){
+  safeSet(LS_ITEM, JSON.stringify(itemCategoryStore));
+  safeSet(LS_CUST, JSON.stringify(custCategoryStore));
+  syncMapsFromStores();
+  persistSession();
+}
+
 function loadStoredMaps(){
-  const it = safeGet(LS_ITEM);
-  if(it){ try{ const m=JSON.parse(it); currentItemMap=m;
-    setMapStatus("status_itemMap", true, Object.keys(m).length); }catch(e){} }
-  const ct = safeGet(LS_CUST);
-  if(ct){ try{ const m=JSON.parse(ct); currentCustMap=m;
-    setMapStatus("status_custMap", true, Object.keys(m).length); }catch(e){} }
+  let itParsed = null;
+  let ctParsed = null;
+  try{ const raw = safeGet(LS_ITEM); if(raw) itParsed = JSON.parse(raw); }catch(e){}
+  try{ const raw = safeGet(LS_CUST); if(raw) ctParsed = JSON.parse(raw); }catch(e){}
+  itemCategoryStore = normalizeCategoryStore(itParsed, DEFAULT_ITEM_MAP);
+  custCategoryStore = normalizeCategoryStore(ctParsed, DEFAULT_CUST_MAP);
+  syncMapsFromStores();
 }
 
-$("itemMapFile").addEventListener("change", async ()=>{
-  const f = $("itemMapFile").files[0];
-  if(!f) return;
-  const m = buildMap(parseCSV(await readFileSmart(f)), DEFAULT_ITEM_MAP);
-  currentItemMap = m;
-  safeSet(LS_ITEM, JSON.stringify(m));
-  setMapStatus("status_itemMap", true, Object.keys(m).length);
-});
-$("custMapFile").addEventListener("change", async ()=>{
-  const f = $("custMapFile").files[0];
-  if(!f) return;
-  const m = buildMap(parseCSV(await readFileSmart(f)), DEFAULT_CUST_MAP);
-  currentCustMap = m;
-  safeSet(LS_CUST, JSON.stringify(m));
-  setMapStatus("status_custMap", true, Object.keys(m).length);
-});
-$("resetItemMap").addEventListener("click", ()=>{
-  safeDel(LS_ITEM); currentItemMap = Object.assign({},DEFAULT_ITEM_MAP);
-  $("itemMapFile").value=""; setMapStatus("status_itemMap", false);
-});
-$("resetCustMap").addEventListener("click", ()=>{
-  safeDel(LS_CUST); currentCustMap = Object.assign({},DEFAULT_CUST_MAP);
-  $("custMapFile").value=""; setMapStatus("status_custMap", false);
-});
+async function refreshCategoryUsageCounts(){
+  categoryUsageCounts = { item: {}, cust: {} };
+  const salesF = $("salesFile").files[0];
+  if(!salesF) return;
+  try{
+    const rows = parseCSV(await readFileSmart(salesF));
+    const h = findHeaderRow(rows, ["품목코드","상품코드","거래처코드"]);
+    const head = rows[h].map(x=>String(x).trim());
+    const itemCol = colIndex(head, ["품목코드","상품코드"], ["품목코드","상품코드"]);
+    const custCol = colIndex(head, ["거래처코드"], ["거래처코드"]);
+    for(let i=h+1;i<rows.length;i++){
+      const r = rows[i];
+      if(!r || isSummaryRow(r)) continue;
+      if(itemCol >= 0){
+        const k = firstLetter(String(r[itemCol]||""));
+        if(k) categoryUsageCounts.item[k] = (categoryUsageCounts.item[k] || 0) + 1;
+      }
+      if(custCol >= 0){
+        const k = firstLetter(String(r[custCol]||""));
+        if(k) categoryUsageCounts.cust[k] = (categoryUsageCounts.cust[k] || 0) + 1;
+      }
+    }
+  }catch(e){}
+}
 
-/* ===== ���� ===== */
-loadStoredMaps();
-$("runBtn").addEventListener("click", runAnalysis);
-$("xlsBtn").addEventListener("click", exportExcel);
+function renderCategoryTable(kind){
+  const store = kind === "item" ? itemCategoryStore : custCategoryStore;
+  const tbody = $(kind === "item" ? "itemCategoryTbody" : "custCategoryTbody");
+  if(!tbody) return;
+  const codes = sortedCategoryCodes(store);
+  const usage = categoryUsageCounts[kind] || {};
+  if(!codes.length){
+    tbody.innerHTML = '<tr><td colspan="5">등록된 분류가 없습니다.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = "";
+  codes.forEach(code=>{
+    const rec = store[code];
+    const tr = document.createElement("tr");
+    if(!rec.active) tr.className = "inactive-row";
+    tr.dataset.code = code;
+    tr.dataset.kind = kind;
+    tr.innerHTML =
+      '<td class="col-code"><strong>'+escapeHtml(code)+'</strong></td>'+
+      '<td class="col-name"><input type="text" class="name-input" value="'+escapeAttr(rec.name)+'" maxlength="64"></td>'+
+      '<td class="col-use"><label><input type="checkbox" class="cat-active"'+(rec.active?' checked':'')+'></label></td>'+
+      '<td class="col-count">'+(usage[code]||0)+'건</td>'+
+      '<td class="col-actions">'+
+        '<button type="button" class="btn small secondary cat-save">저장</button> '+
+        '<button type="button" class="btn small danger cat-del">삭제</button>'+
+      '</td>';
+    tbody.appendChild(tr);
+  });
+}
+
+function escapeHtml(s){
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
+}
+function escapeAttr(s){ return escapeHtml(s); }
+
+async function renderCategoryPanels(){
+  await refreshCategoryUsageCounts();
+  renderCategoryTable("item");
+  renderCategoryTable("cust");
+}
+
+function addCategory(kind){
+  const prefix = kind === "item" ? "itemCat" : "custCat";
+  const store = kind === "item" ? itemCategoryStore : custCategoryStore;
+  let code, name;
+  try{
+    code = validateCategoryCode($(prefix+"CodeInput").value);
+    name = String($(prefix+"NameInput").value || "").trim();
+    if(!name) throw new Error("분류명을 입력하세요.");
+  }catch(e){
+    alert(e.message);
+    return;
+  }
+  if(store[code]){
+    alert("이미 등록된 코드입니다: "+code);
+    return;
+  }
+  store[code] = { name, active: $(prefix+"ActiveInput").checked };
+  $(prefix+"CodeInput").value = "";
+  $(prefix+"NameInput").value = "";
+  $(prefix+"ActiveInput").checked = true;
+  persistCategoryStores();
+  renderCategoryPanels();
+}
+
+function saveCategoryRow(kind, code, tr){
+  const store = kind === "item" ? itemCategoryStore : custCategoryStore;
+  const name = tr.querySelector(".name-input").value.trim();
+  if(!name){ alert("분류명을 입력하세요."); return; }
+  const active = tr.querySelector(".cat-active").checked;
+  store[code] = { name, active };
+  persistCategoryStores();
+  renderCategoryPanels();
+}
+
+function deleteCategoryRow(kind, code){
+  const store = kind === "item" ? itemCategoryStore : custCategoryStore;
+  const usage = (categoryUsageCounts[kind] || {})[code] || 0;
+  let msg = "코드 '"+code+"'를 삭제하시겠습니까?";
+  if(usage > 0) msg += "\n\n현재 불러온 CSV에 "+usage+"건이 사용 중입니다.";
+  if(!confirm(msg)) return;
+  delete store[code];
+  persistCategoryStores();
+  renderCategoryPanels();
+}
+
+async function uploadCategoryCsv(kind){
+  const prefix = kind === "item" ? "itemCat" : "custCat";
+  const store = kind === "item" ? itemCategoryStore : custCategoryStore;
+  const fallback = kind === "item" ? DEFAULT_ITEM_MAP : DEFAULT_CUST_MAP;
+  const f = $(prefix+"UploadFile").files[0];
+  if(!f){ alert("CSV 파일을 선택하세요."); return; }
+  const mode = document.querySelector('input[name="'+prefix+'UploadMode"]:checked')?.value || "merge";
+  const imported = buildMap(parseCSV(await readFileSmart(f)), fallback);
+  if(mode === "replace"){
+    if(!confirm("기존 분류를 모두 지우고 CSV 내용으로 교체할까요?")) return;
+    for(const k of Object.keys(store)) delete store[k];
+  }
+  for(const [code, name] of Object.entries(imported)){
+    const k = String(code).toLowerCase();
+    if(!k) continue;
+    const prev = store[k];
+    store[k] = { name: String(name), active: prev ? prev.active : true };
+  }
+  $(prefix+"UploadFile").value = "";
+  persistCategoryStores();
+  renderCategoryPanels();
+}
+
+function resetCategoryStore(kind){
+  const label = kind === "item" ? "품목" : "거래처";
+  if(!confirm(label+" 분류코드를 기본값으로 되돌릴까요?")) return;
+  if(kind === "item"){
+    itemCategoryStore = defaultCategoryStore(DEFAULT_ITEM_MAP);
+    safeDel(LS_ITEM);
+  }else{
+    custCategoryStore = defaultCategoryStore(DEFAULT_CUST_MAP);
+    safeDel(LS_CUST);
+  }
+  persistCategoryStores();
+  renderCategoryPanels();
+}
+
+function bindCategoryControls(){
+  on("itemCatAddBtn", "click", ()=>addCategory("item"));
+  on("custCatAddBtn", "click", ()=>addCategory("cust"));
+  on("itemCatUploadBtn", "click", ()=>uploadCategoryCsv("item"));
+  on("custCatUploadBtn", "click", ()=>uploadCategoryCsv("cust"));
+  on("resetItemMap", "click", ()=>resetCategoryStore("item"));
+  on("resetCustMap", "click", ()=>resetCategoryStore("cust"));
+
+  ["itemCategoryTbody","custCategoryTbody"].forEach(id=>{
+    const tbody = $(id);
+    if(!tbody || tbody.dataset.bound) return;
+    tbody.dataset.bound = "1";
+    tbody.addEventListener("click", e=>{
+      const tr = e.target.closest("tr");
+      if(!tr || !tr.dataset.code) return;
+      const kind = tr.dataset.kind;
+      const code = tr.dataset.code;
+      if(e.target.classList.contains("cat-save")) saveCategoryRow(kind, code, tr);
+      if(e.target.classList.contains("cat-del")) deleteCategoryRow(kind, code);
+    });
+  });
+}
+
+/* ===== 직납 인식 브랜드 : 화면에서 추가/삭제 (브라우저에 저장) ===== */
+function loadStoredBrands(){
+  const raw = safeGet(LS_BRANDS);
+  if(raw){
+    try{
+      const arr = JSON.parse(raw);
+      if(Array.isArray(arr)) currentBrands = arr.filter(b=>b && String(b).trim());
+    }catch(e){}
+  }
+}
+function persistBrands(){ safeSet(LS_BRANDS, JSON.stringify(currentBrands)); }
+
+function addBrand(name){
+  const b = String(name||"").trim();
+  if(!b){ return; }
+  if(currentBrands.includes(b)){ alert("이미 등록된 브랜드입니다: "+b); return; }
+  currentBrands.push(b);
+  persistBrands();
+  renderBrands();
+}
+function deleteBrand(name){
+  currentBrands = currentBrands.filter(b=>b!==name);
+  persistBrands();
+  renderBrands();
+}
+function resetBrands(){
+  if(!confirm("직납 인식 브랜드를 기본값("+DEFAULT_BRANDS.join(", ")+")으로 되돌릴까요?")) return;
+  currentBrands = DEFAULT_BRANDS.slice();
+  safeDel(LS_BRANDS);
+  renderBrands();
+}
+function renderBrands(){
+  const wrap = $("brandChips");
+  if(!wrap) return;
+  if(currentBrands.length===0){
+    wrap.innerHTML = '<span class="muted">등록된 직납 브랜드가 없습니다. 위에서 추가하세요.</span>';
+    return;
+  }
+  wrap.innerHTML = "";
+  currentBrands.forEach(b=>{
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    const label = document.createElement("span");
+    label.className = "chip-label";
+    label.style.cursor = "default";
+    label.textContent = b;
+    const del = document.createElement("button");
+    del.className = "chip-del";
+    del.textContent = "\u00d7";
+    del.title = "삭제";
+    del.addEventListener("click", ()=>deleteBrand(b));
+    chip.appendChild(label);
+    chip.appendChild(del);
+    wrap.appendChild(chip);
+  });
+}
+$("addBrandBtn").addEventListener("click", ()=>{
+  addBrand($("brandInput").value);
+  $("brandInput").value = "";
+  $("brandInput").focus();
+});
+$("brandInput").addEventListener("keydown", (e)=>{
+  if(e.key==="Enter"){ e.preventDefault(); $("addBrandBtn").click(); }
+});
+$("resetBrands").addEventListener("click", resetBrands);
+
+/* ===== 월별 데이터 저장 / 불러오기 (브라우저 보관) ===== */
+function getMonths(){
+  if(monthsCache) return monthsCache;
+  try{
+    monthsCache = JSON.parse(localStorage.getItem(LS_MONTHS) || "{}");
+    return monthsCache;
+  }catch(e){
+    monthsCache = {};
+    return monthsCache;
+  }
+}
+function setMonths(o){
+  monthsCache = o || {};
+  try{ localStorage.setItem(LS_MONTHS, JSON.stringify(monthsCache)); }catch(e){}
+  return true;
+}
+
+function monthLabel(key){
+  const p = String(key).split("-");
+  return p.length===2 ? (p[0]+"년 "+parseInt(p[1],10)+"월") : key;
+}
+function updateViewLabel(){
+  const el = $("viewLabel");
+  if(!el) return;
+  if(viewingYear){ el.textContent = "현재 보기 : "+viewingYear+"년 연간 (1년 한눈에)"; return; }
+  el.textContent = viewingMonth ? ("현재 보기 : "+monthLabel(viewingMonth)+" 저장 데이터")
+                                : "현재 보기 : 새 분석 결과 (아직 저장 안 됨)";
+}
+
+function saveMonthData(month, options){
+  const opts = options || {};
+  if(!resultTables) return false;
+  if(!month){ alert("기준월을 선택하세요 (예: 2026-05)."); return false; }
+  const months = getMonths();
+  if(months[month] && !opts.overwrite && !confirm(monthLabel(month)+" 데이터가 이미 저장되어 있습니다. 덮어쓸까요?")) return false;
+  months[month] = { savedAt:new Date().toISOString(), kpis:currentKpis, tables:resultTables };
+  if(!setMonths(months)){
+    alert("브라우저 저장 공간이 부족하여 저장하지 못했습니다.\n오래된 월 데이터를 삭제한 뒤 다시 시도해 주세요.");
+    return false;
+  }
+  viewingMonth = month;
+  viewingYear = null;
+  renderSavedMonths();
+  updateViewLabel();
+  updateXlsBtnState();
+  if(!opts.silent) logStatus(monthLabel(month)+" 데이터를 저장했습니다.");
+  if(!opts.deferPersist) persistSession();
+  return true;
+}
+
+function saveCurrentMonth(){
+  if(!resultTables){ alert("먼저 분석을 실행하세요."); return; }
+  const month = $("monthInput").value;
+  saveMonthData(month, {overwrite:false, silent:false});
+}
+
+function loadMonth(month){
+  const data = getMonths()[month];
+  if(!data){ return; }
+  resultTables = normalizeTables(data.tables);
+  currentKpis = data.kpis || [];
+  viewingMonth = month;
+  viewingYear = null;
+  $("monthInput").value = month;
+  renderKPIs(currentKpis);
+  renderTables(resultTables);
+  showAppPage("pageData", { showResults: true });
+  updateViewLabel();
+  renderSavedMonths();
+  updateXlsBtnState();
+  $("results").scrollIntoView({behavior:"smooth", block:"start"});
+}
+
+function deleteMonth(month){
+  if(!confirm(monthLabel(month)+" 데이터를 삭제할까요?")) return;
+  const months = getMonths();
+  delete months[month];
+  setMonths(months);
+  if(viewingMonth===month){ viewingMonth=null; updateViewLabel(); }
+  renderSavedMonths();
+  updateXlsBtnState();
+  persistSession();
+}
+
+function savedMonthKeys(){
+  return Object.keys(getMonths()).sort().reverse();
+}
+function savedYears(){
+  return [...new Set(savedMonthKeys().map(k=>k.split("-")[0]))].sort().reverse();
+}
+function pickYearForDropdown(years){
+  const yearSel = $("savedYearSel");
+  if(viewingYear && years.includes(viewingYear)) return viewingYear;
+  if(viewingMonth){
+    const y = viewingMonth.split("-")[0];
+    if(years.includes(y)) return y;
+  }
+  if(yearSel && yearSel.value && years.includes(yearSel.value)) return yearSel.value;
+  return years[0] || "";
+}
+function fillSavedMonthSelect(year){
+  const monthSel = $("savedMonthSel");
+  if(!monthSel) return;
+  const keys = monthsOfYear(year).sort().reverse();
+  monthSel.innerHTML = "";
+  keys.forEach(mk=>{
+    const o = document.createElement("option");
+    o.value = mk;
+    o.textContent = parseInt(mk.split("-")[1], 10)+"월";
+    monthSel.appendChild(o);
+  });
+  if(!keys.length) return;
+  if(viewingMonth && keys.includes(viewingMonth)) monthSel.value = viewingMonth;
+  else monthSel.value = keys[0];
+}
+function renderSavedMonths(){
+  const empty = $("savedMonthEmpty");
+  const row = $("savedMonthRow");
+  const yearSel = $("savedYearSel");
+  const countEl = $("savedMonthCount");
+  if(!yearSel) return;
+
+  const keys = savedMonthKeys();
+  const years = savedYears();
+
+  if(keys.length===0){
+    if(empty) empty.classList.remove("hide");
+    if(row) row.classList.add("hide");
+    if(countEl) countEl.textContent = "";
+    updateXlsBtnState();
+    return;
+  }
+  if(empty) empty.classList.add("hide");
+  if(row) row.classList.remove("hide");
+
+  const year = pickYearForDropdown(years);
+  yearSel.innerHTML = "";
+  years.forEach(y=>{
+    const o = document.createElement("option");
+    o.value = y;
+    o.textContent = y+"년";
+    yearSel.appendChild(o);
+  });
+  yearSel.value = year;
+  fillSavedMonthSelect(year);
+
+  if(countEl){
+    const n = monthsOfYear(year).length;
+    countEl.textContent = "(저장 "+keys.length+"개월 · "+year+"년 "+n+"개월)";
+  }
+  updateXlsBtnState();
+}
+
+/* 저장된 구매_거래처별 표에서 거래처명 → 지역 색상 클래스 */
+function vendorRegionByName(spanKeys){
+  const map = new Map();
+  spanKeys.forEach(mk=>{
+    const saved = getMonths()[mk];
+    if(!saved) return;
+    const t = normalizeTables(saved.tables||[]).find(x=>x.name==="구매_거래처별");
+    if(!t || !t.rowMeta) return;
+    t.rows.forEach((row, idx)=>{
+      if(row[0]==="총합계") return;
+      const name = String(row[0] || "").trim();
+      if(!name) return;
+      map.set(name, t.rowMeta[idx] || "region-gn");
+    });
+  });
+  return map;
+}
+
+function vendorRegionLegendHTML(){
+  return '<div class="legend">'
+    + '<span class="legend-item"><span class="legend-box region-gn"></span>경상남도 생산시설</span>'
+    + '<span class="legend-item"><span class="legend-box region-out"></span>경상남도외 생산시설</span>'
+    + '</div>';
+}
+
+/* 구매 거래처명 표시용 짧은 이름 */
+function displayVendorName(name){
+  const n = String(name || "").trim();
+  if(!n) return n;
+  if(n.includes("티앤디자인")) return "티앤디자인";
+  if(n.includes("함께 나눔일터") || n.includes("함께나눔일터")) return "함께 나눔일터";
+  return n;
+}
+
+/* 예전 형식(거래처코드·지역분류 열 포함, 색상 메타 없음)으로 저장된
+   구매_거래처별 표를 현재 형식(코드 숨김 + 지역 셀색)으로 변환한다. */
+function normalizeVendorTable(t){
+  if(!t || t.name!=="구매_거래처별") return t;
+  const iName = t.columns.indexOf("거래처명");
+  if(iName < 0) return t;
+
+  if(t.rowMeta){
+    const rows = t.rows.map(r=>{
+      if(r[0]==="총합계") return r;
+      const copy = r.slice();
+      copy[iName] = displayVendorName(copy[iName]);
+      return copy;
+    });
+    return Object.assign({}, t, { rows });
+  }
+
+  const iRegion = t.columns.indexOf("지역분류");
+  const iAmt = t.columns.indexOf("구매금액");
+  const iQty = t.columns.indexOf("수량");
+  if(iRegion < 0) return t;
+  const data = t.rows.filter(r=>r[0]!=="총합계").map(r=>({
+    name: displayVendorName(r[iName]),
+    region: String(r[iRegion] || ""),
+    amt: iAmt >= 0 ? r[iAmt] : 0,
+    qty: iQty >= 0 ? r[iQty] : 0
+  }));
+  const rank = reg => (reg==="경상남도외 생산시설" ? 1 : 0);
+  data.sort((a,b)=>rank(a.region)-rank(b.region));
+  const nt = makeTable("구매_거래처별",
+    ["거래처명","구매금액","수량"], ["구매금액","수량"],
+    data.map(v=>[v.name, v.amt, v.qty]), true);
+  nt.rowMeta = data.map(v=> v.region==="경상남도외 생산시설" ? "region-out" : "region-gn");
+  nt.legend = [
+    {cls:"region-gn", label:"경상남도 생산시설"},
+    {cls:"region-out", label:"경상남도외 생산시설"}
+  ];
+  return nt;
+}
+function normalizeTables(tables){
+  return (tables||[]).map(normalizeVendorTable);
+}
+
+/* ===== 연간 보기 (1년 한눈에 : 1~12월 비교) ===== */
+const ANNUAL_DIM_ORDER = ["거래처분류집계","품목분류집계","직납_품목분류","구매_지역요약","구매_거래처별"];
+const ANNUAL_EXCLUDE = new Set(["직납_상세"]);
+
+function monthsOfYear(year){
+  return Object.keys(getMonths()).filter(k=>k.indexOf(year+"-")===0).sort();
+}
+
+/* 표에서 키열(앞쪽 비숫자열)과 대표 금액열 위치를 구한다 */
+function tableMeta(t){
+  let firstNum = t.columns.findIndex(c=>t.numeric.includes(c));
+  if(firstNum < 1) firstNum = 1;
+  const keyCols = t.columns.slice(0, firstNum);
+  let metric = t.columns.find(c=>c==="매출액")
+            || t.columns.find(c=>c==="구매금액")
+            || t.columns[firstNum] || t.columns[t.columns.length-1];
+  return { keyCols, metricIdx: t.columns.indexOf(metric), firstNum, metric };
+}
+function grandTotalOf(table){
+  if(!table || !table.rows.length) return 0;
+  const last = table.rows[table.rows.length-1];
+  return typeof last[last.length-1]==="number" ? last[last.length-1] : 0;
+}
+
+function buildAnnual(year){
+  const keys = monthsOfYear(year);
+  if(keys.length===0){ alert(year+"년에 저장된 데이터가 없습니다."); return; }
+  const { tables: annualTables, totalsByDim } = buildPeriodPivotTables(keys, { fullYear: true });
+
+  if(annualTables.length===0){ alert(year+"년 데이터에서 집계할 항목을 찾지 못했습니다."); return; }
+
+  /* 연간 KPI */
+  const kpis = [{k:"데이터 보유", v:keys.length+"개월"}];
+  if(totalsByDim["거래처분류집계"]!=null) kpis.push({k:year+"년 총매출", v:fmt(totalsByDim["거래처분류집계"])+" 원"});
+  if(totalsByDim["직납_품목분류"]!=null) kpis.push({k:"직납 매출", v:fmt(totalsByDim["직납_품목분류"])+" 원"});
+  if(totalsByDim["구매_지역요약"]!=null) kpis.push({k:"총 구매액", v:fmt(totalsByDim["구매_지역요약"])+" 원"});
+
+  resultTables = annualTables;
+  currentKpis = kpis;
+  viewingYear = year;
+  viewingMonth = null;
+  renderKPIs(kpis);
+  renderTables(annualTables);
+  showAppPage("pageData", { showResults: true });
+  updateViewLabel();
+  renderSavedMonths();
+  updateXlsBtnState();
+  logStatus(year+"년 연간 보기 ("+keys.length+"개월) 를 표시했습니다.");
+  $("results").scrollIntoView({behavior:"smooth", block:"start"});
+}
+
+/* 저장 월·연간 보기 공통: 종류별 1시트, 월별 열(1월·2월…·합계) */
+function buildPeriodPivotTables(monthKeys, opts){
+  opts = opts || {};
+  if(!monthKeys.length) return { tables: [], totalsByDim: {} };
+  monthKeys = monthKeys.slice().sort();
+  const all = getMonths();
+  const norm = {};
+  monthKeys.forEach(mk=>{ norm[mk] = normalizeTables(all[mk].tables||[]); });
+
+  const years = new Set(monthKeys.map(k=>k.split("-")[0]));
+  const sameYear = years.size === 1;
+  const useFullYear = opts.fullYear && sameYear;
+
+  let colMonths;
+  if(useFullYear){
+    colMonths = [];
+    for(let m=1; m<=12; m++) colMonths.push({ mk: null, mn: m, label: m+"월" });
+  }else{
+    colMonths = monthKeys.map(mk=>{
+      const mn = parseInt(mk.split("-")[1], 10);
+      return { mk, mn, label: sameYear ? (mn+"월") : monthLabel(mk) };
+    });
+  }
+
+  const present = new Set();
+  monthKeys.forEach(mk=>norm[mk].forEach(t=>{
+    if(!ANNUAL_EXCLUDE.has(t.name)) present.add(t.name);
+  }));
+  const dims = ANNUAL_DIM_ORDER.filter(d=>present.has(d))
+             .concat([...present].filter(d=>ANNUAL_DIM_ORDER.indexOf(d)<0));
+
+  const tables = [];
+  const totalsByDim = {};
+
+  dims.forEach(dim=>{
+    const isVendor = dim==="구매_거래처별";
+    const regionByKey = {};
+    let meta = null, keyHeader = null;
+    const pivot = new Map();
+
+    monthKeys.forEach(mk=>{
+      const t = norm[mk].find(x=>x.name===dim);
+      if(!t) return;
+      if(!meta){ meta = tableMeta(t); keyHeader = meta.keyCols.join(" · ") || dim; }
+      const mn = parseInt(mk.split("-")[1], 10);
+      t.rows.forEach((row, ri)=>{
+        if(row[0]==="총합계") return;
+        const rawKey = meta.keyCols.map((c,i)=>row[i]==null?"":String(row[i])).join(" · ");
+        const pkey = normalizeReportDimKey(dim, rawKey);
+        if(isVendor && t.rowMeta && t.rowMeta[ri]) regionByKey[pkey] = t.rowMeta[ri];
+        const val = row[meta.metricIdx];
+        if(typeof val!=="number") return;
+        let o = pivot.get(pkey);
+        if(!o){ o = {}; pivot.set(pkey, o); }
+        o[mn] = (o[mn]||0) + val;
+      });
+    });
+    if(!meta) return;
+
+    const cols = [keyHeader];
+    colMonths.forEach(c=>cols.push(c.label));
+    cols.push("합계");
+    const numericCols = cols.slice(1);
+
+    const entries = [...pivot.entries()].map(([pk, o])=>{
+      const r = [pk];
+      let sum = 0;
+      colMonths.forEach(c=>{
+        const v = o[c.mn];
+        if(v==null) r.push("");
+        else { r.push(v); sum += v; }
+      });
+      r.push(sum);
+      return { pk, r, sum };
+    });
+
+    let rowMeta = null;
+    if(isVendor){
+      const rank = pk => (regionByKey[pk]==="region-out" ? 1 : 0);
+      entries.sort((a,b)=>{
+        const ra=rank(a.pk), rb=rank(b.pk);
+        if(ra!==rb) return ra-rb;
+        return b.sum-a.sum;
+      });
+      rowMeta = entries.map(e=> regionByKey[e.pk]==="region-out" ? "region-out" : "region-gn");
+    }else{
+      entries.sort((a,b)=>b.sum-a.sum);
+    }
+    const dataRows = entries.map(e=>e.r);
+
+    const label = dim + " (" + (meta.metric||"금액") + ", 월별)";
+    const tbl = makeTable(label, cols, numericCols, dataRows, true);
+    tbl.exportSheetName = dim;
+    if(isVendor){
+      tbl.rowMeta = rowMeta;
+      tbl.legend = [
+        {cls:"region-gn", label:"경상남도 생산시설"},
+        {cls:"region-out", label:"경상남도외 생산시설"}
+      ];
+    }
+    tables.push(tbl);
+    totalsByDim[dim] = grandTotalOf(tbl);
+  });
+
+  return { tables, totalsByDim };
+}
+
+/* ===== 데이터 분석 보고서 (연간 + 전년 대비) ===== */
+const REPORT_CUR = "#2f57c4";   // 올해
+const REPORT_PREV = "#b9c0d4";  // 전년
+
+function fmtShort(n){
+  n = Math.round(n||0);
+  const a = Math.abs(n);
+  if(a>=100000000) return (n/100000000).toFixed(1).replace(/\.0$/,"")+"억";
+  if(a>=10000) return Math.round(n/10000).toLocaleString("ko-KR")+"만";
+  return n.toLocaleString("ko-KR");
+}
+function fmtSigned(n){ return (n>=0?"+":"")+fmt(n); }
+function fmtRate(cur, prev){
+  if(prev>0) return ((cur-prev)/prev*100>=0?"+":"")+((cur-prev)/prev*100).toFixed(1)+"%";
+  return cur>0 ? "신규" : "-";
+}
+
+/* 특정 연도·디멘션의 합계: 항목별 합계, 월별(1~12) 합계, 총합, 금액열명 */
+function annualAgg(year, dim){
+  return periodAgg(year, 1, 12, dim);
+}
+
+function monthsInRange(year, startM, endM){
+  const y = String(year);
+  const keys = [];
+  for(let m=startM; m<=endM; m++) keys.push(y+"-"+String(m).padStart(2,"0"));
+  return keys;
+}
+function periodLabel(year, startM, endM){
+  const y = String(year);
+  if(startM===endM) return y+"년 "+startM+"월";
+  if(startM===1 && endM===12) return y+"년 전체";
+  return y+"년 "+startM+"월~"+endM+"월";
+}
+function readPeriodInputs(prefix){
+  return {
+    year: parseInt($(prefix+"Year").value, 10),
+    startM: parseInt($(prefix+"Start").value, 10),
+    endM: parseInt($(prefix+"End").value, 10)
+  };
+}
+function validatePeriod(spec, name){
+  if(!spec.year || isNaN(spec.startM) || isNaN(spec.endM)) return name+": 연도와 월을 입력하세요.";
+  if(spec.startM<1 || spec.startM>12 || spec.endM<1 || spec.endM>12) return name+": 월은 1~12 사이여야 합니다.";
+  if(spec.startM>spec.endM) return name+": 시작월이 종료월보다 클 수 없습니다.";
+  return null;
+}
+function countSavedInRange(spec){
+  return monthsInRange(spec.year, spec.startM, spec.endM).filter(k=>getMonths()[k]).length;
+}
+
+function ymKey(year, month){
+  return String(year)+"-"+String(month).padStart(2,"0");
+}
+function specStartKey(spec){ return ymKey(spec.year, spec.startM); }
+function specEndKey(spec){ return ymKey(spec.year, spec.endM); }
+
+/* 기준·비교 기간의 앞뒤 사이에 있는 저장 월까지 모두 포함 */
+function reportSpanKeys(curSpec, prevSpec){
+  const starts = [specStartKey(curSpec), specStartKey(prevSpec)].sort();
+  const ends = [specEndKey(curSpec), specEndKey(prevSpec)].sort();
+  const startKey = starts[0], endKey = ends[ends.length-1];
+  return Object.keys(getMonths()).filter(k=>k>=startKey && k<=endKey).sort();
+}
+function spanLabelFromKeys(keys){
+  if(!keys.length) return "";
+  if(keys.length===1) return monthLabel(keys[0]);
+  const [y1,m1] = keys[0].split("-");
+  const [y2,m2] = keys[keys.length-1].split("-");
+  if(y1===y2) return periodLabel(y1, parseInt(m1,10), parseInt(m2,10));
+  return monthLabel(keys[0])+" ~ "+monthLabel(keys[keys.length-1]);
+}
+
+function normalizeReportDimKey(dim, key){
+  const k = String(key || "");
+  if(dim === "거래처분류집계" && k === "기타") return "기타기관";
+  return k;
+}
+
+function monthDimTotal(mk, dim){
+  const saved = getMonths()[mk];
+  if(!saved) return 0;
+  const t = normalizeTables(saved.tables||[]).find(x=>x.name===dim);
+  if(!t) return 0;
+  const meta = tableMeta(t);
+  let total = 0;
+  t.rows.forEach(row=>{
+    if(row[0]==="총합계") return;
+    const val = row[meta.metricIdx];
+    if(typeof val==="number") total += val;
+  });
+  return total;
+}
+
+function spanYearlyTotals(monthKeys, dim){
+  const map = new Map();
+  monthKeys.forEach(mk=>{
+    const y = mk.split("-")[0];
+    map.set(y, (map.get(y)||0) + monthDimTotal(mk, dim));
+  });
+  return [...map.entries()].sort((a,b)=>a[0]<b[0]?-1:1);
+}
+
+const YEAR_LINE_COLORS = [
+  "#e74c3c","#3498db","#2ecc71","#9b59b6","#f39c12",
+  "#1abc9c","#e67e22","#34495e","#d35400","#16a085",
+  "#c0392b","#2980b9","#27ae60","#8e44ad","#2f57c4"
+];
+function yearColor(i){ return YEAR_LINE_COLORS[i % YEAR_LINE_COLORS.length]; }
+
+function spanYearlyMonthlySeries(monthKeys, dim, startM, endM){
+  startM = startM || 1;
+  endM = endM || 12;
+  const years = [...new Set(monthKeys.map(k=>k.split("-")[0]))].sort();
+  const labels = [];
+  for(let m=startM; m<=endM; m++) labels.push(m+"월");
+  const series = years.map((y, i)=>({
+    name: y+"년",
+    color: yearColor(i),
+    values: labels.map((_, mi)=>{
+      const mk = ymKey(y, startM + mi);
+      return monthKeys.includes(mk) ? monthDimTotal(mk, dim) : 0;
+    })
+  }));
+  return {labels, series, years, startM, endM};
+}
+
+function spanYearlyBarSeries(monthKeys, dim){
+  const totals = spanYearlyTotals(monthKeys, dim);
+  return {
+    categories: totals.map(([y])=>y+"년"),
+    series: [{
+      name: "연간 합계",
+      color: "#2f57c4",
+      values: totals.map(([,v])=>v),
+      barColors: totals.map((_,i)=>yearColor(i))
+    }]
+  };
+}
+
+function itemKeyAmount(mk, dim, itemKey){
+  const saved = getMonths()[mk];
+  if(!saved) return 0;
+  const t = normalizeTables(saved.tables||[]).find(x=>x.name===dim);
+  if(!t) return 0;
+  const meta = tableMeta(t);
+  let total = 0;
+  t.rows.forEach(row=>{
+    if(row[0]==="총합계") return;
+    const key = meta.keyCols.map((c,i)=>row[i]==null?"":String(row[i])).join(" · ");
+    if(normalizeReportDimKey(dim, key) !== normalizeReportDimKey(dim, itemKey)) return;
+    const val = row[meta.metricIdx];
+    if(typeof val==="number") total += val;
+  });
+  return total;
+}
+
+function itemKeysInMonthRange(monthKeys, y, startM, endM, dim, itemKey){
+  let sum = 0;
+  monthKeys.forEach(mk=>{
+    if(!mk.startsWith(y+"-")) return;
+    const m = parseInt(mk.split("-")[1],10);
+    if(m < startM || m > endM) return;
+    sum += itemKeyAmount(mk, dim, itemKey);
+  });
+  return sum;
+}
+
+function spanItemsMultiYearBars(spanKeys, dim, curSpec, prevSpec, categories){
+  const years = [...new Set(spanKeys.map(k=>k.split("-")[0]))].sort();
+  const { startM, endM } = reportMonthRange(curSpec, prevSpec);
+  const series = years.map((y,i)=>({
+    name: periodLabel(parseInt(y,10), startM, endM),
+    color: yearColor(i),
+    values: categories.map(k=>itemKeysInMonthRange(spanKeys, y, startM, endM, dim, k))
+  }));
+  return { series, years, startM, endM };
+}
+
+function chartTableYearSeries(multiData){
+  return multiData.series.map((s, i)=>({name: multiData.years[i] + "년", values: s.values}));
+}
+
+function seriesYearKey(name){
+  const m = String(name).match(/^(\d{4})/);
+  return m ? m[1] : "";
+}
+
+function yoyCompareCells(curSpec, series, rowValues){
+  if(!curSpec) return '<td class="num">-</td><td class="num">-</td>';
+  const baseYear = String(curSpec.year);
+  const priorYear = String(curSpec.year - 1);
+  let baseVal = 0, priorVal = 0;
+  series.forEach((s, i)=>{
+    const y = seriesYearKey(s.name);
+    const v = rowValues[i] || 0;
+    if(y === baseYear) baseVal = v;
+    if(y === priorYear) priorVal = v;
+  });
+  if(priorVal === 0 && baseVal === 0) return '<td class="num">-</td><td class="num">-</td>';
+  const diff = baseVal - priorVal;
+  const cls = diff > 0 ? "pos" : (diff < 0 ? "neg" : "");
+  return '<td class="num '+cls+'">'+fmtSigned(diff)+'</td>'
+       + '<td class="num '+cls+'">'+fmtRate(baseVal, priorVal)+'</td>';
+}
+
+function chartDataTableHTML(rowHeader, labels, series, opts){
+  opts = opts || {};
+  if(!labels || !labels.length || !series || !series.length) return "";
+  const showRowTotal = opts.showRowTotal !== false && series.length > 1;
+  const showColTotal = opts.showColTotal !== false;
+  const yoyCur = opts.yoyCurSpec || null;
+  const yoyHint = yoyCur
+    ? periodLabel(yoyCur.year, yoyCur.startM, yoyCur.endM)
+      + " vs " + periodLabel(yoyCur.year - 1, yoyCur.startM, yoyCur.endM)
+    : "";
+  let h = '<div class="chart-datatable"><div class="tablewrap"><table><thead><tr>';
+  h += '<th class="firstcol">'+escapeHTML(rowHeader)+'</th>';
+  series.forEach(s=>{ h += '<th class="num">'+escapeHTML(s.name)+'</th>'; });
+  if(showRowTotal) h += '<th class="num">행 합계</th>';
+  if(yoyCur){
+    h += '<th class="num" title="'+escapeHTML(yoyHint)+'">증감액</th>';
+    h += '<th class="num" title="'+escapeHTML(yoyHint)+'">증감률</th>';
+  }
+  h += '</tr></thead><tbody>';
+  const colTotals = series.map(()=>0);
+  labels.forEach((lb, li)=>{
+    h += '<tr><td class="firstcol">'+escapeHTML(lb)+'</td>';
+    const rowVals = [];
+    let rowSum = 0;
+    series.forEach((s, si)=>{
+      const v = (s.values && s.values[li]) || 0;
+      rowVals.push(v);
+      colTotals[si] += v;
+      rowSum += v;
+      h += '<td class="num">'+fmt(v)+'</td>';
+    });
+    if(showRowTotal) h += '<td class="num">'+fmt(rowSum)+'</td>';
+    if(yoyCur) h += yoyCompareCells(yoyCur, series, rowVals);
+    h += '</tr>';
+  });
+  if(showColTotal){
+    h += '<tr class="total"><td class="firstcol">합계</td>';
+    let grand = 0;
+    colTotals.forEach(t=>{
+      grand += t;
+      h += '<td class="num">'+fmt(t)+'</td>';
+    });
+    if(showRowTotal) h += '<td class="num">'+fmt(grand)+'</td>';
+    if(yoyCur) h += yoyCompareCells(yoyCur, series, colTotals);
+    h += '</tr>';
+  }
+  h += '</tbody></table></div></div>';
+  return h;
+}
+
+function yearlyMonthlyBarChart(title, monthKeys, dim, startM, endM){
+  const data = spanYearlyMonthlySeries(monthKeys, dim, startM, endM);
+  if(!data.years.length) return "";
+  const monthTag = startM === endM ? (startM+"월") : (startM+"~"+endM+"월");
+  const displayTitle = title.replace("1~12월", monthTag);
+  const tbl = chartDataTableHTML("월", data.labels, data.series, {showRowTotal:false});
+  const chartH = Math.max(200, data.labels.length * 44 + 90);
+  return chartBox(displayTitle, chartLegend(data.series)+svgBars(data.labels, data.series, chartH), tbl);
+}
+
+function spanYearlyPeriodTotals(monthKeys, dim, startM, endM){
+  startM = startM || 1;
+  endM = endM || 12;
+  const years = [...new Set(monthKeys.map(k=>k.split("-")[0]))].sort();
+  return years.map(y=>{
+    let total = 0;
+    for(let m=startM; m<=endM; m++){
+      const mk = ymKey(y, m);
+      if(monthKeys.includes(mk)) total += monthDimTotal(mk, dim);
+    }
+    return [parseInt(y,10), total];
+  });
+}
+
+function priorYearPeriodTotal(year, monthKeys, dim, startM, endM){
+  const py = year - 1;
+  let total = 0, found = false;
+  for(let m=startM; m<=endM; m++){
+    const mk = ymKey(py, m);
+    if(monthKeys.includes(mk)){
+      total += monthDimTotal(mk, dim);
+      found = true;
+    }
+  }
+  return { total, found };
+}
+
+function yearlyTotalYoYTableHTML(spanKeys, dim, startM, endM, curSpec){
+  const totals = spanYearlyPeriodTotals(spanKeys, dim, startM, endM);
+  if(!totals.length) return "";
+  const periodTag = startM === endM ? (startM+"월") : (startM+"~"+endM+"월");
+  const series = totals.map(([y, total])=>({name: y+"년", values: [total]}));
+  const yoyHint = curSpec
+    ? periodLabel(curSpec.year, curSpec.startM, curSpec.endM)
+      + " vs " + periodLabel(curSpec.year - 1, curSpec.startM, curSpec.endM)
+    : "";
+
+  let h = '<div class="chart-datatable"><div class="tablewrap"><table><thead><tr>';
+  h += '<th class="firstcol">구분</th>';
+  totals.forEach(([y])=>{ h += '<th class="num">'+y+'년</th>'; });
+  if(curSpec){
+    h += '<th class="num" title="'+escapeHTML(yoyHint)+'">증감액</th>';
+    h += '<th class="num" title="'+escapeHTML(yoyHint)+'">증감률</th>';
+  }
+  h += '</tr></thead><tbody>';
+
+  h += '<tr class="total"><td class="firstcol">합계 ('+escapeHTML(periodTag)+')</td>';
+  totals.forEach(([, total])=>{ h += '<td class="num">'+fmt(total)+'</td>'; });
+  if(curSpec){
+    h += yoyCompareCells(curSpec, series, totals.map(([,t])=>t));
+  }
+  h += '</tr>';
+
+  h += '</tbody></table></div></div>';
+  return h;
+}
+
+function yearlyTotalBarChart(title, monthKeys, dim, startM, endM, curSpec){
+  const totals = spanYearlyPeriodTotals(monthKeys, dim, startM, endM);
+  if(!totals.length) return "";
+  const periodTag = startM === endM ? (startM+"월") : (startM+"~"+endM+"월");
+  const categories = totals.map(([y])=>y+"년");
+  const yLegend = totals.map(([y], i)=>({name:y+"년", color:yearColor(i)}));
+  const series = [{
+    name: "합계",
+    color: "#2f57c4",
+    values: totals.map(([,v])=>v),
+    barColors: totals.map((_,i)=>yearColor(i))
+  }];
+  const tbl = yearlyTotalYoYTableHTML(monthKeys, dim, startM, endM, curSpec);
+  const chartH = Math.max(200, totals.length * 45 + 90);
+  return chartBox(title+" ("+periodTag+")", chartLegend(yLegend)+svgBars(categories, series, chartH), tbl);
+}
+
+function spanTrendComment(label, spanKeys, dim, curSpec){
+  const years = spanYearlyTotals(spanKeys, dim);
+  if(!years.length) return "";
+  const paras = [];
+  const priorSpec = priorYearSpec(curSpec);
+  const curLabel = periodLabel(curSpec.year, curSpec.startM, curSpec.endM);
+  const prevLabel = periodLabel(priorSpec.year, priorSpec.startM, priorSpec.endM);
+  const curTotal = monthDimTotalForSpec(curSpec, dim);
+  const prevTotal = monthDimTotalForSpec(priorSpec, dim);
+  let s = "포함 구간("+spanLabelFromKeys(spanKeys)+") "+label+" — ";
+  s += years.map(([y,t])=>y+"년 <b>"+fmt(t)+"원</b>").join(", ")+".";
+  paras.push(s);
+  s = "기준년 vs 직전년: "+curLabel+" <b>"+fmt(curTotal)+"원</b>";
+  if(prevTotal>0){
+    const diff = curTotal - prevTotal;
+    s += " vs "+prevLabel+" "+fmt(prevTotal)+"원"
+       + " (<b class='"+(diff>=0?"pos":"neg")+"'>"+fmtSigned(diff)+"원, "+fmtRate(curTotal,prevTotal)+"</b>).";
+  }else s += " (직전년 "+prevLabel+" 데이터 없음).";
+  paras.push(s);
+  return paras.map(p=>'<p style="margin:0 0 8px">'+p+'</p>').join("");
+}
+
+function monthDimTotalForSpec(spec, dim){
+  return monthsInRange(spec.year, spec.startM, spec.endM)
+    .reduce((s,mk)=>s+monthDimTotal(mk,dim),0);
+}
+
+function periodAgg(year, startM, endM, dim){
+  const all = getMonths();
+  const keys = monthsInRange(year, startM, endM);
+  const span = endM - startM + 1;
+  const byKey = new Map();
+  const monthly = new Array(span).fill(0);
+  let total = 0, metric = null;
+  keys.forEach(mk=>{
+    const saved = all[mk];
+    if(!saved) return;
+    const t = normalizeTables(saved.tables||[]).find(x=>x.name===dim);
+    if(!t) return;
+    const meta = tableMeta(t);
+    if(!metric) metric = meta.metric;
+    const mn = parseInt(mk.split("-")[1],10);
+    const idx = mn - startM;
+    t.rows.forEach(row=>{
+      if(row[0]==="총합계") return;
+      const rawKey = meta.keyCols.map((c,i)=>row[i]==null?"":String(row[i])).join(" · ");
+      const key = normalizeReportDimKey(dim, rawKey);
+      const val = row[meta.metricIdx];
+      if(typeof val!=="number") return;
+      byKey.set(key, (byKey.get(key)||0)+val);
+      if(idx>=0 && idx<span) monthly[idx]+=val;
+      total += val;
+    });
+  });
+  return {
+    byKey, monthly, total, metric, keys,
+    year:String(year), startM, endM, span,
+    label: periodLabel(year, startM, endM)
+  };
+}
+
+function reportMonthRange(curSpec, prevSpec){
+  return {
+    startM: Math.min(curSpec.startM, prevSpec.startM),
+    endM: Math.max(curSpec.endM, prevSpec.endM)
+  };
+}
+
+/* 기준·비교 구간 사이 모든 연도의 동월 막대 (예: 2023~2026년 1~5월) */
+function multiYearMonthlyCompare(spanKeys, dim, curSpec, prevSpec){
+  const years = [...new Set(spanKeys.map(k=>k.split("-")[0]))].sort();
+  const { startM, endM } = reportMonthRange(curSpec, prevSpec);
+  const labels = [];
+  for(let m=startM; m<=endM; m++) labels.push(m+"월");
+  const series = years.map((y, i)=>({
+    name: periodLabel(parseInt(y,10), startM, endM),
+    color: yearColor(i),
+    values: labels.map((_, mi)=>{
+      const mk = ymKey(y, startM + mi);
+      return spanKeys.includes(mk) ? monthDimTotal(mk, dim) : 0;
+    })
+  }));
+  return { labels, series, years, startM, endM };
+}
+
+function priorYearSpec(curSpec){
+  return { year: curSpec.year - 1, startM: curSpec.startM, endM: curSpec.endM };
+}
+
+function yoyRows(dim, curSpec, prevSpec){
+  const cur = periodAgg(curSpec.year, curSpec.startM, curSpec.endM, dim);
+  const prev = periodAgg(prevSpec.year, prevSpec.startM, prevSpec.endM, dim);
+  const keys = new Set([...cur.byKey.keys(), ...prev.byKey.keys()]);
+  const rows = [...keys].map(k=>{
+    const c = cur.byKey.get(k)||0, p = prev.byKey.get(k)||0;
+    return { k, c, p, diff:c-p };
+  }).sort((a,b)=>b.c-a.c);
+  return { cur, prev, rows };
+}
+
+/* ---- SVG 그래프 (외부 라이브러리 없이) ---- */
+const CHART_CATEGORY_LABELS = {
+  "화장지, 물티슈": "화장지",
+  "용역서비스": "용역",
+  "인쇄판촉물": "인쇄판촉",
+  "종량제봉투": "종량제",
+  "장갑 피복": "장갑/피복",
+  "예그리나 장애인보호작업장": "예그리나",
+  "(사)다올장애인협회 디오텍": "디오텍",
+  "장애인보호작업장 소담": "소담"
+};
+
+function chartCategoryLabel(name, maxChars){
+  const k = String(name || "").trim();
+  if(!k) return "";
+  if(CHART_CATEGORY_LABELS[k]) return CHART_CATEGORY_LABELS[k];
+
+  let short = k;
+  if(k.includes(" ") && k.length > 10){
+    const last = (k.split(/\s+/).pop() || "").replace(/^[()사.\s]+/, "");
+    if(last.length >= 2 && last.length <= 8) short = last;
+  }
+
+  if(maxChars && short.length > maxChars){
+    return short.slice(0, Math.max(1, maxChars - 1)) + "…";
+  }
+  return short;
+}
+
+function svgLine(xLabels, series, h, opts){
+  opts = opts || {};
+  const n = xLabels.length;
+  const mL = 56, mR = 16, mT = 16;
+  const mB = opts.mB || (opts.wide ? 64 : 36);
+  const ptW = opts.pointWidth || (opts.wide ? 36 : 0);
+  const W = opts.wide ? Math.max(740, mL + mR + Math.max(n, 1) * ptW) : 740;
+  const H = h || (opts.wide ? 320 : 260);
+  const plotW = W - mL - mR, plotH = H - mT - mB;
+  let max = 0;
+  series.forEach(s=>s.values.forEach(v=>{ if(v>max) max=v; }));
+  if(max<=0) max=1;
+  const xAt = i=> mL + (n<=1 ? plotW/2 : plotW*i/(n-1));
+  const yAt = v=> mT + plotH - plotH*(v/max);
+  let svg = '<svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" class="chart">';
+  [0,0.5,1].forEach(f=>{
+    const y = mT + plotH - plotH*f;
+    svg += '<line x1="'+mL+'" y1="'+y+'" x2="'+(W-mR)+'" y2="'+y+'" stroke="#eee"/>';
+    svg += '<text x="'+(mL-6)+'" y="'+(y+4)+'" text-anchor="end" class="ct">'+fmtShort(max*f)+'</text>';
+  });
+  const step = opts.labelStep || (n>36?3:n>24?2:1);
+  xLabels.forEach((lb,i)=>{
+    if(i % step !== 0 && i !== n-1) return;
+    const x = xAt(i), y = H - 8;
+    if(opts.wide){
+      svg += '<text transform="translate('+x+','+y+') rotate(-50)" text-anchor="end" class="ct">'+escapeHTML(lb)+'</text>';
+    }else{
+      svg += '<text x="'+x+'" y="'+y+'" text-anchor="middle" class="ct">'+escapeHTML(lb)+'</text>';
+    }
+  });
+  series.forEach(s=>{
+    const pts = s.values.map((v,i)=>xAt(i)+","+yAt(v)).join(" ");
+    svg += '<polyline points="'+pts+'" fill="none" stroke="'+s.color+'" stroke-width="'+(opts.strokeWidth||2.5)+'"/>';
+    if(!opts.noDots){
+      s.values.forEach((v,i)=>{
+        svg += '<circle cx="'+xAt(i)+'" cy="'+yAt(v)+'" r="'+(opts.dotR||3)+'" fill="'+s.color+'"/>';
+      });
+    }
+  });
+  svg += '</svg>';
+  return svg;
+}
+
+function svgBars(categories, series, h, opts){
+  opts = opts || {};
+  const n = categories.length, g = series.length;
+  const rotate = !!opts.rotateLabels;
+  const maxLabelLen = categories.reduce((m,c)=>Math.max(m, chartCategoryLabel(c).length), 0);
+  const mL = 56, mR = 16, mT = 16;
+  let mB, W, H, plotH, labelFontSize;
+  if(rotate){
+    labelFontSize = n > 10 ? 9 : (maxLabelLen > 14 ? 9 : 10);
+    mB = Math.max(96, 30 + Math.min(maxLabelLen, 18) * 3.6);
+    const groupMin = Math.max(72, g * 22 + 30);
+    W = Math.max(740, n * groupMin);
+    plotH = Math.max(180, (h || Math.max(300, n * 36 + 100)) - mT - mB);
+    H = mT + plotH + mB;
+  }else{
+    labelFontSize = opts.compactLabels
+      ? (n > 14 ? 6 : n > 10 ? 7 : 8)
+      : ((n > 8 || maxLabelLen > 9) ? 8 : 9);
+    const groupMin = opts.compactLabels
+      ? Math.max(52, g * 16 + 20)
+      : Math.max(70, g * 22 + 28);
+    W = (n > 6 || opts.compactLabels) ? Math.max(740, n * groupMin) : 740;
+    H = h || Math.max(280, n * 40 + 90);
+    mB = Math.max(52, labelFontSize + 16);
+    plotH = H - mT - mB;
+  }
+  const plotW = W - mL - mR;
+  let max = 0;
+  series.forEach(s=>s.values.forEach(v=>{ if(v>max) max=v; }));
+  if(max<=0) max=1;
+  const groupW = plotW/Math.max(n,1);
+  const barW = Math.max(8, Math.min(48, (groupW*0.75)/Math.max(g,1)));
+  const yAt = v=>mT+plotH-plotH*(v/max);
+  let svg = '<svg viewBox="0 0 '+W+' '+H+'" class="chart" preserveAspectRatio="xMidYMid meet">';
+  [0,0.5,1].forEach(f=>{
+    const y = mT + plotH - plotH*f;
+    svg += '<line x1="'+mL+'" y1="'+y+'" x2="'+(W-mR)+'" y2="'+y+'" stroke="#eee"/>';
+    svg += '<text x="'+(mL-6)+'" y="'+(y+4)+'" text-anchor="end" class="ct">'+fmtShort(max*f)+'</text>';
+  });
+  categories.forEach((cat,i)=>{
+    const cx = mL + groupW*i + groupW/2;
+    series.forEach((s,j)=>{
+      const v = s.values[i]||0;
+      const fill = (s.barColors && s.barColors[i]) || s.color;
+      const x = cx - (g*barW)/2 + j*barW;
+      const y = yAt(v), bh = mT + plotH - y;
+      svg += '<rect x="'+x+'" y="'+y+'" width="'+(barW-2)+'" height="'+Math.max(0,bh)+'" fill="'+fill+'" rx="3"/>';
+    });
+    const origLabel = String(cat);
+    if(rotate){
+      const fontSize = n > 10 ? 9 : (maxLabelLen > 14 ? 9 : 10);
+      const maxChars = fontSize <= 9 ? 24 : 18;
+      const label = chartCategoryLabel(cat, maxChars);
+      const display = label;
+      const ly = mT + plotH + 6;
+      svg += '<text x="'+cx+'" y="'+ly+'" text-anchor="end" transform="rotate(-42 '+cx+' '+ly+')" '
+           + 'class="ct cat-label" font-size="'+fontSize+'">';
+      if(display !== label || label !== origLabel) svg += '<title>'+escapeHTML(origLabel)+'</title>';
+      svg += escapeHTML(display)+'</text>';
+    }else{
+      const maxChars = Math.max(3, Math.floor(groupW / (labelFontSize * 0.82)));
+      const label = chartCategoryLabel(cat, maxChars);
+      const display = label;
+      svg += '<text x="'+cx+'" y="'+(mT+plotH+14)+'" text-anchor="middle" class="ct cat-label" font-size="'+labelFontSize+'">';
+      if(display !== label || label !== origLabel) svg += '<title>'+escapeHTML(origLabel)+'</title>';
+      svg += escapeHTML(display)+'</text>';
+    }
+  });
+  svg += '</svg>';
+  return svg;
+}
+function chartLegend(series){
+  return '<div class="legend">'+series.map(s=>
+    '<span class="legend-item"><span class="legend-box" style="background:'+s.color+'"></span>'+escapeHTML(s.name)+'</span>'
+  ).join("")+'</div>';
+}
+function chartBox(title, inner, dataTable){
+  let h = '<div class="chartbox"><div class="ctitle">'+escapeHTML(title)+'</div>';
+  if(dataTable) h += dataTable;
+  h += inner;
+  h += '</div>';
+  return h;
+}
+
+function yoyComment(name, data, opts){
+  opts = opts || {};
+  const curLabel = data.cur.label, prevLabel = data.prev.label;
+  const c = data.cur.total, p = data.prev.total, diff = c - p;
+  const paras = [];
+  const priorYear = opts.itemChangeAnalysis || opts.priorYearSummary;
+  const prevTag = priorYear ? "직전년" : "비교 기간";
+  const curTag = priorYear ? "기준년" : "기준 기간";
+
+  /* ① 전체 실적 요약 */
+  let s1 = curTag+" "+curLabel+" "+name+" 합계는 <b>"+fmt(c)+"원</b>입니다.";
+  if(p>0){
+    const rate = diff/p*100;
+    s1 += " "+prevTag+"("+prevLabel+" "+fmt(p)+"원) 대비 <b class='"+(diff>=0?"pos":"neg")+"'>"
+         +fmtSigned(diff)+"원 ("+(rate>=0?"+":"")+rate.toFixed(1)+"%)</b> "
+         +(diff>=0?"증가":"감소")+"했습니다.";
+  }else{
+    s1 += " "+prevTag+"("+prevLabel+") 저장 데이터가 없어 증감은 산출하지 않았습니다.";
+  }
+  paras.push(s1);
+
+  /* ② 상위 항목 비중 */
+  const ranked = data.rows.filter(r=>r.k && r.c>0).sort((a,b)=>b.c-a.c);
+  if(ranked.length && c>0){
+    const top3 = ranked.slice(0,3);
+    const top3Sum = top3.reduce((s,r)=>s+r.c,0);
+    const share = (top3Sum/c*100).toFixed(1);
+    s1 = curTag+" 상위 3개 항목 — "
+       + top3.map(r=>"'"+escapeHTML(r.k)+"' "+fmt(r.c)+"원").join(", ")
+       + " — 이(가) 전체의 <b>"+share+"%</b>를 차지합니다.";
+    if(p>0){
+      const prevTop = [...data.rows].filter(r=>r.k && r.p>0).sort((a,b)=>b.p-a.p)[0];
+      if(prevTop) s1 += " "+prevTag+" 1위는 '"+escapeHTML(prevTop.k)+"'("+fmt(prevTop.p)+"원)였습니다.";
+    }
+    paras.push(s1);
+  }
+
+  /* ③ 증감 항목 요약 — 품목별 증감 분석 블록 사용 시 생략 */
+  if(!opts.itemChangeAnalysis){
+    const increased = data.rows.filter(r=>r.diff>0).sort((a,b)=>b.diff-a.diff);
+    const decreased = data.rows.filter(r=>r.diff<0).sort((a,b)=>a.diff-b.diff);
+    const newOnes = data.rows.filter(r=>r.c>0 && r.p===0);
+    const gone = data.rows.filter(r=>r.c===0 && r.p>0);
+    const parts3 = [];
+    if(increased.length){
+      parts3.push("증가 "+increased.length+"개 — "
+        + increased.slice(0,3).map(r=>"'"+escapeHTML(r.k)+"' "+fmtSigned(r.diff)+"원").join(", ")
+        +(increased.length>3?" 외 "+(increased.length-3)+"개":""));
+    }
+    if(decreased.length){
+      parts3.push("감소 "+decreased.length+"개 — "
+        + decreased.slice(0,3).map(r=>"'"+escapeHTML(r.k)+"' "+fmtSigned(r.diff)+"원").join(", ")
+        +(decreased.length>3?" 외 "+(decreased.length-3)+"개":""));
+    }
+    if(newOnes.length){
+      parts3.push("비교 기간 실적 없음 → 기준 기간 신규 "+newOnes.length+"개 ("
+        + newOnes.slice(0,4).map(r=>escapeHTML(r.k)).join(", ")
+        +(newOnes.length>4?" 외 "+(newOnes.length-4)+"개":"") + ")");
+    }
+    if(gone.length){
+      parts3.push("기준 기간 실적 없음 → 비교 기간만 존재 "+gone.length+"개 ("
+        + gone.slice(0,4).map(r=>escapeHTML(r.k)).join(", ")
+        +(gone.length>4?" 외 "+(gone.length-4)+"개":"") + ")");
+    }
+    if(parts3.length) paras.push(parts3.join(" "));
+  }
+
+  /* ④ 품목별 900만원 이상 안내 */
+  if(opts.minChartAmount){
+    const hi = data.rows.filter(r=>r.c>=opts.minChartAmount);
+    paras.push("매출 <b>"+fmt(opts.minChartAmount)+"원 이상</b> 품목은 <b>"+hi.length+"개</b>이며, 아래 그래프·표에 해당 품목을 모두 포함했습니다."
+      +(hi.length===0?" (해당 구간 품목 없음 — 상위 항목으로 대체)":""));
+  }
+
+  return paras.map(p=>'<p style="margin:0 0 8px">'+p+'</p>').join("");
+}
+
+function itemChangeRows(data, opts, direction){
+  let rows = data.rows.filter(r=>{
+    if(direction === "up") return r.diff > 0 && r.c > 0;
+    return r.diff < 0 && r.p > 0;
+  });
+  if(opts.minChartAmount){
+    rows = rows.filter(r=>r.c >= opts.minChartAmount || r.p >= opts.minChartAmount);
+  }
+  rows.sort((a,b)=> direction === "up" ? b.diff - a.diff : a.diff - b.diff);
+  return rows;
+}
+
+function itemChangeRateCell(r){
+  if(r.p > 0) return fmtRate(r.c, r.p);
+  if(r.c > 0) return "신규";
+  return "-";
+}
+
+function increaseItemsAnalysisHTML(keyHeader, data, opts){
+  opts = opts || {};
+  const curLabel = data.cur.label, prevLabel = data.prev.label;
+  const increased = itemChangeRows(data, opts, "up");
+  if(!increased.length) return "";
+
+  const totalIncrease = increased.reduce((s,r)=>s + r.diff, 0);
+  const overallDiff = data.cur.total - data.prev.total;
+  const newCount = increased.filter(r=>r.p === 0).length;
+
+  let h = '<div class="report-comment report-increase">';
+  h += '<h4>증가 품목 분석</h4>';
+  h += '<p style="margin:0 0 8px">기준년 <b>'+escapeHTML(curLabel)+'</b> vs 직전년 <b>'+escapeHTML(prevLabel)+'</b>, '
+     +'매출이 늘어난 품목 <b>'+increased.length+'개</b>'
+     +(newCount ? ' (신규 <b>'+newCount+'개</b>)' : '')
+     +', 증가 합계 <b class="pos">'+fmtSigned(totalIncrease)+'원</b>';
+  if(overallDiff > 0){
+    h += ' (전체 증가액 <b class="pos">'+fmtSigned(overallDiff)+'원</b> 중 '
+       +'<b>'+(totalIncrease / overallDiff * 100).toFixed(1)+'%</b>)';
+  }
+  h += '.</p>';
+
+  h += '<div class="tablewrap"><table><thead><tr>';
+  h += '<th class="firstcol">'+escapeHTML(keyHeader)+'</th>';
+  h += '<th class="num">'+escapeHTML(prevLabel)+'</th>';
+  h += '<th class="num">'+escapeHTML(curLabel)+'</th>';
+  h += '<th class="num">증가액</th><th class="num">증가율</th>';
+  h += '</tr></thead><tbody>';
+  increased.forEach(r=>{
+    h += '<tr><td class="firstcol">'+escapeHTML(r.k||"(미지정)")+'</td>';
+    h += '<td class="num">'+(r.p > 0 ? fmt(r.p) : "-")+'</td><td class="num">'+fmt(r.c)+'</td>';
+    h += '<td class="num pos">'+fmtSigned(r.diff)+'</td>';
+    h += '<td class="num pos">'+itemChangeRateCell(r)+'</td></tr>';
+  });
+  const sumP = increased.reduce((s,r)=>s+r.p,0);
+  const sumC = increased.reduce((s,r)=>s+r.c,0);
+  h += '<tr class="total"><td class="firstcol">증가 품목 소계</td>';
+  h += '<td class="num">'+fmt(sumP)+'</td><td class="num">'+fmt(sumC)+'</td>';
+  h += '<td class="num pos">'+fmtSigned(totalIncrease)+'</td>';
+  h += '<td class="num pos">'+fmtRate(sumC, sumP)+'</td></tr>';
+  h += '</tbody></table></div>';
+
+  const top3 = increased.filter(r=>r.p > 0).slice(0, 3);
+  if(top3.length){
+    h += '<p style="margin:8px 0 0">증가 폭 상위 — ';
+    h += top3.map((r,i)=>
+      (i+1)+") '"+escapeHTML(r.k)+"' <b class='pos'>"+fmtSigned(r.diff)+"원</b> ("+fmtRate(r.c,r.p)+")"
+    ).join("; ");
+    h += '.</p>';
+  }
+  const newOnes = increased.filter(r=>r.p === 0);
+  if(newOnes.length){
+    h += '<p style="margin:8px 0 0">직전년 실적 없음 → 기준년 신규 '
+       + newOnes.map(r=>"'"+escapeHTML(r.k)+"' ("+fmt(r.c)+"원)").join(", ")
+       +'.</p>';
+  }
+  h += '</div>';
+  return h;
+}
+
+function declineItemsAnalysisHTML(keyHeader, data, opts){
+  opts = opts || {};
+  const curLabel = data.cur.label, prevLabel = data.prev.label;
+  const decreased = itemChangeRows(data, opts, "down");
+  if(!decreased.length) return "";
+
+  const totalDecline = decreased.reduce((s,r)=>s + r.diff, 0);
+  const overallDiff = data.cur.total - data.prev.total;
+
+  let h = '<div class="report-comment report-decline">';
+  h += '<h4>감소 품목 분석</h4>';
+  h += '<p style="margin:0 0 8px">기준년 <b>'+escapeHTML(curLabel)+'</b> vs 직전년 <b>'+escapeHTML(prevLabel)+'</b>, '
+     +'매출이 줄어든 품목 <b>'+decreased.length+'개</b>, 감소 합계 '
+     +'<b class="neg">'+fmtSigned(totalDecline)+'원</b>';
+  if(overallDiff < 0){
+    h += ' (전체 감소액 <b class="neg">'+fmtSigned(overallDiff)+'원</b> 중 '
+       +'<b>'+Math.abs(totalDecline / overallDiff * 100).toFixed(1)+'%</b>)';
+  }
+  h += '.</p>';
+
+  h += '<div class="tablewrap"><table><thead><tr>';
+  h += '<th class="firstcol">'+escapeHTML(keyHeader)+'</th>';
+  h += '<th class="num">'+escapeHTML(prevLabel)+'</th>';
+  h += '<th class="num">'+escapeHTML(curLabel)+'</th>';
+  h += '<th class="num">감소액</th><th class="num">감소율</th>';
+  h += '</tr></thead><tbody>';
+  decreased.forEach(r=>{
+    h += '<tr><td class="firstcol">'+escapeHTML(r.k||"(미지정)")+'</td>';
+    h += '<td class="num">'+fmt(r.p)+'</td><td class="num">'+fmt(r.c)+'</td>';
+    h += '<td class="num neg">'+fmtSigned(r.diff)+'</td>';
+    h += '<td class="num neg">'+fmtRate(r.c, r.p)+'</td></tr>';
+  });
+  const sumP = decreased.reduce((s,r)=>s+r.p,0);
+  const sumC = decreased.reduce((s,r)=>s+r.c,0);
+  h += '<tr class="total"><td class="firstcol">감소 품목 소계</td>';
+  h += '<td class="num">'+fmt(sumP)+'</td><td class="num">'+fmt(sumC)+'</td>';
+  h += '<td class="num neg">'+fmtSigned(totalDecline)+'</td>';
+  h += '<td class="num neg">'+fmtRate(sumC, sumP)+'</td></tr>';
+  h += '</tbody></table></div>';
+
+  const top3 = decreased.filter(r=>r.c > 0).slice(0, 3);
+  if(top3.length){
+    h += '<p style="margin:8px 0 0">감소 폭 상위 — ';
+    h += top3.map((r,i)=>
+      (i+1)+") '"+escapeHTML(r.k)+"' <b class='neg'>"+fmtSigned(r.diff)+"원</b> ("+fmtRate(r.c,r.p)+")"
+    ).join("; ");
+    h += '.</p>';
+  }
+  const gone = decreased.filter(r=>r.c === 0);
+  if(gone.length){
+    h += '<p style="margin:8px 0 0">기준년 실적 없음 → 직전년만 존재 '
+       + gone.map(r=>"'"+escapeHTML(r.k)+"' ("+fmt(r.p)+"원)").join(", ")
+       +'.</p>';
+  }
+  h += '</div>';
+  return h;
+}
+
+function monthlyTrendComment(label, cur, prev){
+  const cTotal=cur.total, pTotal=prev.total, diff=cTotal-pTotal;
+  const paras = [];
+  let s = "기준년 "+cur.label+" "+label+" 합계는 <b>"+fmt(cTotal)+"원</b>입니다.";
+  if(pTotal>0){
+    s += " 직전년("+prev.label+" "+fmt(pTotal)+"원) 대비 <b class='"+(diff>=0?"pos":"neg")+"'>"
+       +fmtSigned(diff)+"원 ("+fmtRate(cTotal,pTotal)+")</b>입니다.";
+  }
+  paras.push(s);
+
+  const peak = cur.monthly.reduce((b,v,i)=>v>b.v?{v,i}:b,{v:0,i:-1});
+  const active = cur.monthly.filter(v=>v>0).length;
+  if(peak.i>=0 && peak.v>0){
+    const peakMonth = cur.startM + peak.i;
+    s = "기준년 실적이 있는 달은 <b>"+active+"개월</b>이며, "
+       + "<b>"+peakMonth+"월</b>이 최대("+fmt(peak.v)+"원)입니다.";
+    if(pTotal>0){
+      const prevPeak = prev.monthly.reduce((b,v,i)=>v>b.v?{v,i}:b,{v:0,i:-1});
+      if(prevPeak.i>=0 && prevPeak.v>0){
+        const prevPeakMonth = prev.startM + prevPeak.i;
+        s += " 직전년 최대월은 "+prevPeakMonth+"월("+fmt(prevPeak.v)+"원)입니다.";
+        const pi = peakMonth - prev.startM;
+        const peakDiff = peak.v - ((pi>=0 && pi<prev.span) ? (prev.monthly[pi]||0) : 0);
+        if(peakDiff!==0) s += " 같은 "+peakMonth+"월 기준 직전년 대비 <b class='"+(peakDiff>=0?"pos":"neg")+"'>"
+          +fmtSigned(peakDiff)+"원</b>입니다.";
+      }
+    }
+    paras.push(s);
+  }
+
+  if(pTotal>0){
+    const monthDiffs = [];
+    for(let m=cur.startM; m<=cur.endM; m++){
+      const ci = m - cur.startM;
+      const pi = m - prev.startM;
+      if(pi<0 || pi>=prev.span) continue;
+      const v = cur.monthly[ci]||0, pv = prev.monthly[pi]||0;
+      if(v>0 || pv>0) monthDiffs.push({m, v, pv, d:v-pv});
+    }
+    monthDiffs.sort((a,b)=>Math.abs(b.d)-Math.abs(a.d));
+    if(monthDiffs.length){
+      const top = monthDiffs.slice(0,3).filter(x=>x.d!==0);
+      if(top.length){
+        paras.push("월별 증감이 두드러진 달 — "
+          + top.map(x=>x.m+"월 "+fmtSigned(x.d)+"원").join(", ")+".");
+      }
+    }
+  }
+  return paras.map(p=>'<p style="margin:0 0 8px">'+p+'</p>').join("");
+}
+
+function yoyTableHTML(keyHeader, data, rowsOverride){
+  const rows = rowsOverride || data.rows;
+  const curLabel = data.cur.label, prevLabel = data.prev.label;
+  let h='<div class="tablewrap"><table><thead><tr>';
+  h+='<th class="firstcol">'+escapeHTML(keyHeader)+'</th>';
+  h+='<th class="num">'+escapeHTML(curLabel)+'</th><th class="num">'+escapeHTML(prevLabel)+'</th>';
+  h+='<th class="num">증감액</th><th class="num">증감률</th></tr></thead><tbody>';
+  rows.forEach(r=>{
+    const cls = r.diff>0?"pos":(r.diff<0?"neg":"");
+    h+='<tr><td class="firstcol">'+escapeHTML(r.k||"(미지정)")+'</td>';
+    h+='<td class="num">'+fmt(r.c)+'</td><td class="num">'+fmt(r.p)+'</td>';
+    h+='<td class="num '+cls+'">'+fmtSigned(r.diff)+'</td>';
+    h+='<td class="num '+cls+'">'+fmtRate(r.c,r.p)+'</td></tr>';
+  });
+  const sumC = rows.reduce((s,r)=>s+r.c,0), sumP = rows.reduce((s,r)=>s+r.p,0);
+  h+='<tr class="total"><td class="firstcol">소계</td>';
+  h+='<td class="num">'+fmt(sumC)+'</td><td class="num">'+fmt(sumP)+'</td>';
+  const td=sumC-sumP, tcls=td>0?"pos":(td<0?"neg":"");
+  h+='<td class="num '+tcls+'">'+fmtSigned(td)+'</td>';
+  h+='<td class="num '+tcls+'">'+fmtRate(sumC,sumP)+'</td></tr>';
+  h+='</tbody></table></div>';
+  return h;
+}
+
+/* 그래프와 동일 — 포함 구간 각 연도 열 + 증감(기준년 vs 직전년) */
+function multiYearTableHTML(keyHeader, spanKeys, dim, curSpec, prevSpec, rowKeys){
+  const { startM, endM } = reportMonthRange(curSpec, prevSpec);
+  const years = [...new Set(spanKeys.map(k=>k.split("-")[0]))].sort();
+  const yearLabels = years.map(y=>periodLabel(parseInt(y,10), startM, endM));
+  const baseYear = String(curSpec.year);
+  const priorYear = String(curSpec.year - 1);
+  const diffHint = periodLabel(curSpec.year, curSpec.startM, curSpec.endM)
+    + " vs " + periodLabel(curSpec.year - 1, curSpec.startM, curSpec.endM);
+  const isVendor = dim === "구매_거래처별";
+  const regionMap = isVendor ? vendorRegionByName(spanKeys) : null;
+
+  let h = isVendor ? vendorRegionLegendHTML() : "";
+  h += '<div class="tablewrap"><table><thead><tr>';
+  h+='<th class="firstcol">'+escapeHTML(keyHeader)+'</th>';
+  yearLabels.forEach(l=>{ h+='<th class="num">'+escapeHTML(l)+'</th>'; });
+  h+='<th class="num" title="'+escapeHTML(diffHint)+'">증감액</th>';
+  h+='<th class="num" title="'+escapeHTML(diffHint)+'">증감률</th>';
+  h+='</tr></thead><tbody>';
+
+  const yearTotals = years.map(()=>0);
+  let sumBase = 0, sumPrior = 0;
+
+  rowKeys.forEach(k=>{
+    const baseVal = itemKeysInMonthRange(spanKeys, baseYear, curSpec.startM, curSpec.endM, dim, k);
+    const priorVal = itemKeysInMonthRange(spanKeys, priorYear, curSpec.startM, curSpec.endM, dim, k);
+    const diff = baseVal - priorVal;
+    const cls = diff>0?"pos":(diff<0?"neg":"");
+    const rcls = regionMap ? (regionMap.get(k) || "region-gn") : "";
+    h+='<tr class="'+rcls+'"><td class="firstcol">'+escapeHTML(k||"(미지정)")+'</td>';
+    years.forEach((y, yi)=>{
+      const v = itemKeysInMonthRange(spanKeys, y, startM, endM, dim, k);
+      yearTotals[yi] += v;
+      h+='<td class="num">'+fmt(v)+'</td>';
+    });
+    sumBase += baseVal; sumPrior += priorVal;
+    h+='<td class="num '+cls+'">'+fmtSigned(diff)+'</td>';
+    h+='<td class="num '+cls+'">'+fmtRate(baseVal,priorVal)+'</td></tr>';
+  });
+
+  const td = sumBase - sumPrior, tcls = td>0?"pos":(td<0?"neg":"");
+  h+='<tr class="total"><td class="firstcol">소계</td>';
+  yearTotals.forEach(t=>{ h+='<td class="num">'+fmt(t)+'</td>'; });
+  h+='<td class="num '+tcls+'">'+fmtSigned(td)+'</td>';
+  h+='<td class="num '+tcls+'">'+fmtRate(sumBase,sumPrior)+'</td></tr>';
+  h+='</tbody></table></div>';
+  return h;
+}
+
+function yoyCompareValues(curSpec, series, rowValues){
+  if(!curSpec) return [0, "-"];
+  const baseYear = String(curSpec.year);
+  const priorYear = String(curSpec.year - 1);
+  let baseVal = 0, priorVal = 0;
+  series.forEach((s, i)=>{
+    const y = seriesYearKey(s.name);
+    const v = rowValues[i] || 0;
+    if(y === baseYear) baseVal = v;
+    if(y === priorYear) priorVal = v;
+  });
+  if(priorVal === 0 && baseVal === 0) return [0, "-"];
+  return [baseVal - priorVal, fmtRate(baseVal, priorVal)];
+}
+
+function chartDataExportTable(rowHeader, labels, series, opts){
+  opts = opts || {};
+  const showRowTotal = opts.showRowTotal !== false && series.length > 1;
+  const showColTotal = opts.showColTotal !== false;
+  const yoyCur = opts.yoyCurSpec || null;
+  const columns = [rowHeader];
+  series.forEach(s=>{ columns.push(s.name); });
+  if(showRowTotal) columns.push("행 합계");
+  if(yoyCur){ columns.push("증감액"); columns.push("증감률"); }
+  const numeric = columns.filter(c=>c !== "증감률");
+  const rows = [];
+  const colTotals = series.map(()=>0);
+  labels.forEach((lb, li)=>{
+    const rowVals = [];
+    let rowSum = 0;
+    const row = [lb];
+    series.forEach((s, si)=>{
+      const v = (s.values && s.values[li]) || 0;
+      rowVals.push(v);
+      colTotals[si] += v;
+      rowSum += v;
+      row.push(v);
+    });
+    if(showRowTotal) row.push(rowSum);
+    if(yoyCur){
+      const cmp = yoyCompareValues(yoyCur, series, rowVals);
+      row.push(cmp[0], cmp[1]);
+    }
+    rows.push(row);
+  });
+  if(showColTotal){
+    const row = ["합계"];
+    let grand = 0;
+    colTotals.forEach(t=>{ grand += t; row.push(t); });
+    if(showRowTotal) row.push(grand);
+    if(yoyCur){
+      const cmp = yoyCompareValues(yoyCur, series, colTotals);
+      row.push(cmp[0], cmp[1]);
+    }
+    rows.push(row);
+  }
+  return { columns, rows, numeric };
+}
+
+function yearlyTotalExportTable(spanKeys, dim, startM, endM, curSpec, sheetName){
+  const totals = spanYearlyPeriodTotals(spanKeys, dim, startM, endM);
+  if(!totals.length) return null;
+  const periodTag = startM === endM ? (startM+"월") : (startM+"~"+endM+"월");
+  const series = totals.map(([y, total])=>({name: y+"년", values: [total]}));
+  const columns = ["구분", ...totals.map(([y])=>y+"년")];
+  if(curSpec){ columns.push("증감액"); columns.push("증감률"); }
+  const numeric = columns.filter(c=>c !== "증감률");
+  const vals = totals.map(([, t])=>t);
+  const row = ["합계 ("+periodTag+")", ...vals];
+  if(curSpec){
+    const cmp = yoyCompareValues(curSpec, series, vals);
+    row.push(cmp[0], cmp[1]);
+  }
+  return {
+    name: sheetName,
+    exportSheetName: sheetName,
+    columns,
+    rows: [row],
+    numeric
+  };
+}
+
+function multiYearSectionExportTable(sheetName, keyHeader, spanKeys, dim, curSpec, prevSpec, rowKeys){
+  const { startM, endM } = reportMonthRange(curSpec, prevSpec);
+  const years = [...new Set(spanKeys.map(k=>k.split("-")[0]))].sort();
+  const yearLabels = years.map(y=>periodLabel(parseInt(y,10), startM, endM));
+  const baseYear = String(curSpec.year);
+  const priorYear = String(curSpec.year - 1);
+  const columns = [keyHeader, ...yearLabels, "증감액", "증감률"];
+  const numeric = columns.filter(c=>c !== "증감률");
+  const rows = [];
+  const yearTotals = years.map(()=>0);
+  let sumBase = 0, sumPrior = 0;
+  rowKeys.forEach(k=>{
+    const vals = years.map((y, yi)=>{
+      const v = itemKeysInMonthRange(spanKeys, y, startM, endM, dim, k);
+      yearTotals[yi] += v;
+      return v;
+    });
+    const baseVal = itemKeysInMonthRange(spanKeys, baseYear, curSpec.startM, curSpec.endM, dim, k);
+    const priorVal = itemKeysInMonthRange(spanKeys, priorYear, curSpec.startM, curSpec.endM, dim, k);
+    const diff = baseVal - priorVal;
+    rows.push([k||"(미지정)", ...vals, diff, fmtRate(baseVal, priorVal)]);
+    sumBase += baseVal;
+    sumPrior += priorVal;
+  });
+  const td = sumBase - sumPrior;
+  rows.push(["소계", ...yearTotals, td, fmtRate(sumBase, sumPrior)]);
+  return {
+    name: sheetName,
+    exportSheetName: sheetName,
+    columns,
+    rows,
+    numeric
+  };
+}
+
+function buildReportExportTables(curSpec, prevSpec, spanKeys){
+  const used = new Set();
+  const tables = [];
+  const add = t=>{
+    if(!t || !t.rows || !t.rows.length) return;
+    t.exportSheetName = uniqueSheetName(t.exportSheetName || t.name, used);
+    tables.push(t);
+  };
+  const curLabel = periodLabel(curSpec.year, curSpec.startM, curSpec.endM);
+  const prevLabel = periodLabel(prevSpec.year, prevSpec.startM, prevSpec.endM);
+  const spanLabel = spanLabelFromKeys(spanKeys);
+  const priorSpec = priorYearSpec(curSpec);
+  const priorLabel = periodLabel(priorSpec.year, priorSpec.startM, priorSpec.endM);
+  const { startM: ymStart, endM: ymEnd } = reportMonthRange(curSpec, prevSpec);
+
+  const custCur = periodAgg(curSpec.year, curSpec.startM, curSpec.endM, "거래처분류집계");
+  const custPriorY = periodAgg(priorSpec.year, priorSpec.startM, priorSpec.endM, "거래처분류집계");
+  const itemCur = periodAgg(curSpec.year, curSpec.startM, curSpec.endM, "품목분류집계");
+  const itemPriorY = periodAgg(priorSpec.year, priorSpec.startM, priorSpec.endM, "품목분류집계");
+  const purCur = periodAgg(curSpec.year, curSpec.startM, curSpec.endM, "구매_지역요약");
+  const purPriorY = periodAgg(priorSpec.year, priorSpec.startM, priorSpec.endM, "구매_지역요약");
+
+  add({
+    name: "요약",
+    exportSheetName: "요약",
+    columns: ["항목", "기준("+curLabel+")", "직전년("+priorLabel+")", "증감액", "증감률"],
+    rows: [
+      ["기준 기간", curLabel, "", "", ""],
+      ["비교 기간", prevLabel, "", "", ""],
+      ["포함 구간", spanLabel+" ("+spanKeys.length+"개월)", "", "", ""],
+      ["거래처 기준 총매출", custCur.total, custPriorY.total, custCur.total - custPriorY.total, fmtRate(custCur.total, custPriorY.total)],
+      ["품목 기준 총매출", itemCur.total, itemPriorY.total, itemCur.total - itemPriorY.total, fmtRate(itemCur.total, itemPriorY.total)],
+      ["총 구매액", purCur.total, purPriorY.total, purCur.total - purPriorY.total, fmtRate(purCur.total, purPriorY.total)]
+    ],
+    numeric: ["기준("+curLabel+")", "직전년("+priorLabel+")", "증감액"]
+  });
+
+  add(yearlyTotalExportTable(spanKeys, "거래처분류집계", ymStart, ymEnd, curSpec, "연도별_매출합계"));
+  add(yearlyTotalExportTable(spanKeys, "구매_지역요약", ymStart, ymEnd, curSpec, "연도별_구매합계"));
+
+  const salesMulti = multiYearMonthlyCompare(spanKeys, "거래처분류집계", curSpec, prevSpec);
+  const purMulti = multiYearMonthlyCompare(spanKeys, "구매_지역요약", curSpec, prevSpec);
+  add(Object.assign(chartDataExportTable("월", salesMulti.labels, salesMulti.series,
+    {showRowTotal:false, yoyCurSpec: curSpec}), {name:"동월_매출비교", exportSheetName:"동월_매출비교"}));
+  add(Object.assign(chartDataExportTable("월", purMulti.labels, purMulti.series,
+    {showRowTotal:false, yoyCurSpec: curSpec}), {name:"동월_구매비교", exportSheetName:"동월_구매비교"}));
+
+  const itemData = yoyRows("품목분류집계", curSpec, prevSpec);
+  let itemRowKeys = itemData.rows.filter(r=>r.c >= 9000000).map(r=>r.k);
+  if(!itemRowKeys.length){
+    itemRowKeys = itemData.rows.filter(r=>r.c > 0).slice(0, 5).map(r=>r.k);
+  }
+  add(multiYearSectionExportTable("품목별_판매", "품목분류명", spanKeys, "품목분류집계", curSpec, prevSpec, itemRowKeys));
+
+  const custData = yoyRows("거래처분류집계", curSpec, prevSpec);
+  add(multiYearSectionExportTable("거래처별_판매", "거래처분류명", spanKeys, "거래처분류집계", curSpec, prevSpec,
+    custData.rows.map(r=>r.k)));
+
+  const purVendorData = yoyRows("구매_거래처별", curSpec, prevSpec);
+  add(multiYearSectionExportTable("거래처별_구매", "거래처명", spanKeys, "구매_거래처별", curSpec, prevSpec,
+    purVendorData.rows.slice(0, 10).map(r=>r.k)));
+
+  return tables;
+}
+
+function reportExportFilenameTag(curSpec, prevSpec){
+  const cur = periodLabel(curSpec.year, curSpec.startM, curSpec.endM).replace(/\s/g,"");
+  const prev = periodLabel(prevSpec.year, prevSpec.startM, prevSpec.endM).replace(/\s/g,"");
+  return "보고서_"+cur+"_vs_"+prev;
+}
+
+function buildReportChartSvgMap(curSpec, prevSpec, spanKeys){
+  const map = {};
+  const { startM: ymStart, endM: ymEnd } = reportMonthRange(curSpec, prevSpec);
+
+  const salesTotals = spanYearlyPeriodTotals(spanKeys, "거래처분류집계", ymStart, ymEnd);
+  if(salesTotals.length){
+    const categories = salesTotals.map(([y])=>y+"년");
+    map["연도별_매출합계"] = svgBars(categories, [{
+      name: "합계",
+      color: "#2f57c4",
+      values: salesTotals.map(([, v])=>v),
+      barColors: salesTotals.map((_, i)=>yearColor(i))
+    }], Math.max(200, categories.length * 45 + 90));
+  }
+
+  const purTotals = spanYearlyPeriodTotals(spanKeys, "구매_지역요약", ymStart, ymEnd);
+  if(purTotals.length){
+    const categories = purTotals.map(([y])=>y+"년");
+    map["연도별_구매합계"] = svgBars(categories, [{
+      name: "합계",
+      color: "#2f57c4",
+      values: purTotals.map(([, v])=>v),
+      barColors: purTotals.map((_, i)=>yearColor(i))
+    }], Math.max(200, categories.length * 45 + 90));
+  }
+
+  const salesMulti = multiYearMonthlyCompare(spanKeys, "거래처분류집계", curSpec, prevSpec);
+  map["동월_매출비교"] = svgBars(salesMulti.labels, salesMulti.series,
+    Math.max(260, salesMulti.years.length * 24 + 180));
+
+  const purMulti = multiYearMonthlyCompare(spanKeys, "구매_지역요약", curSpec, prevSpec);
+  map["동월_구매비교"] = svgBars(purMulti.labels, purMulti.series,
+    Math.max(260, purMulti.years.length * 24 + 180));
+
+  const itemData = yoyRows("품목분류집계", curSpec, prevSpec);
+  let itemKeys = itemData.rows.filter(r=>r.c >= 9000000).map(r=>r.k);
+  if(!itemKeys.length){
+    itemKeys = itemData.rows.filter(r=>r.c > 0).slice(0, 5).map(r=>r.k);
+  }
+  if(itemKeys.length){
+    const itemMulti = spanItemsMultiYearBars(spanKeys, "품목분류집계", curSpec, prevSpec, itemKeys);
+    map["품목별_판매"] = svgBars(itemKeys, itemMulti.series,
+      Math.max(240, itemMulti.years.length * 22 + 140));
+  }
+
+  const custData = yoyRows("거래처분류집계", curSpec, prevSpec);
+  const custKeys = custData.rows.slice(0, 8).map(r=>r.k);
+  if(custKeys.length){
+    const custMulti = spanItemsMultiYearBars(spanKeys, "거래처분류집계", curSpec, prevSpec, custKeys);
+    map["거래처별_판매"] = svgBars(custKeys, custMulti.series,
+      Math.max(280, custMulti.years.length * 28 + 200));
+  }
+
+  const purVendorData = yoyRows("구매_거래처별", curSpec, prevSpec);
+  const purKeys = purVendorData.rows.slice(0, 10).map(r=>r.k);
+  if(purKeys.length){
+    const purMultiBars = spanItemsMultiYearBars(spanKeys, "구매_거래처별", curSpec, prevSpec, purKeys);
+    map["거래처별_구매"] = svgBars(purKeys, purMultiBars.series,
+      Math.max(280, purKeys.length * 36 + 80, purMultiBars.years.length * 28 + 200));
+  }
+
+  return map;
+}
+
+async function attachReportChartImages(tables, curSpec, prevSpec, spanKeys){
+  const svgMap = buildReportChartSvgMap(curSpec, prevSpec, spanKeys);
+  for(const t of tables){
+    const sheet = t.exportSheetName || t.name;
+    const svgHtml = svgMap[sheet];
+    if(!svgHtml) continue;
+    const png = await svgHtmlToPngDataUrl(svgHtml, 2);
+    if(!png) continue;
+    const displayW = Math.min(920, Math.max(640, png.width));
+    const displayH = Math.max(220, Math.round(png.height * (displayW / png.width)));
+    t.charts = [{
+      title: String(sheet).replace(/_/g, " ")+" 차트",
+      png: png.dataUrl,
+      b64: png.dataUrl.replace(/^data:image\/png;base64,/, ""),
+      width: displayW,
+      height: displayH
+    }];
+  }
+}
+
+function reportSection(name, dim, keyHeader, curSpec, prevSpec, opts){
+  opts = opts || {};
+  const data = yoyRows(dim, curSpec, prevSpec);
+  if(data.cur.byKey.size===0 && data.prev.byKey.size===0) return "";
+  const curLabel = data.cur.label, prevLabel = data.prev.label;
+  const series = [
+    {name:curLabel, color:REPORT_CUR},
+    {name:prevLabel, color:REPORT_PREV}
+  ];
+
+  /* 그래프·표에 넣을 행 선택 */
+  let chartRows, tableRows, chartTitle;
+  if(opts.minChartAmount){
+    chartRows = data.rows.filter(r=>r.c>=opts.minChartAmount);
+    tableRows = chartRows.slice();
+    if(chartRows.length===0){
+      chartRows = data.rows.filter(r=>r.c>0).slice(0,5);
+      tableRows = chartRows.slice();
+    }
+    chartTitle = name+" ("+fmt(opts.minChartAmount)+"원 이상, "+chartRows.length+"개 · "+curLabel+" vs "+prevLabel+")";
+  }else{
+    const topN = opts.topN || 8;
+    chartRows = data.rows.slice(0, topN);
+    tableRows = opts.limitTableToTop ? chartRows.slice() : data.rows;
+    chartTitle = name+" 상위 "+chartRows.length+"개 비교 ("+curLabel+" vs "+prevLabel+")";
+  }
+
+  const cats = chartRows.map(r=>r.k||"(미지정)");
+  const chartH = Math.max(280, cats.length*36+80);
+  const barOpts = opts.rotateLabels ? { rotateLabels: true } : {};
+  if(cats.length > 6 || opts.minChartAmount) barOpts.compactLabels = true;
+  let bars, barLegend, multi = null;
+  if(opts.spanKeys && opts.spanKeys.length){
+    multi = spanItemsMultiYearBars(opts.spanKeys, dim, curSpec, prevSpec, cats);
+    const yearNames = multi.years.map(y=>periodLabel(parseInt(y,10), multi.startM, multi.endM)).join(" · ");
+    barLegend = multi.series;
+    const multiH = opts.minChartAmount
+      ? Math.max(240, multi.years.length * 22 + 140)
+      : Math.max(chartH, multi.years.length * 28 + 200);
+    bars = svgBars(cats, multi.series, multiH, barOpts);
+    if(opts.minChartAmount){
+      chartTitle = name+" ("+fmt(opts.minChartAmount)+"원 이상, "+chartRows.length+"개 · "+yearNames+")";
+    }else{
+      chartTitle = name+" 상위 "+chartRows.length+"개 비교 ("+yearNames+")";
+    }
+  }else{
+    barLegend = series;
+    bars = svgBars(cats, [
+      {name:series[0].name, color:REPORT_CUR, values:chartRows.map(r=>r.c)},
+      {name:series[1].name, color:REPORT_PREV, values:chartRows.map(r=>r.p)}
+    ], chartH, barOpts);
+  }
+
+  const priorSpec = priorYearSpec(curSpec);
+  const summaryData = (opts.itemChangeAnalysis || opts.priorYearSummary)
+    ? yoyRows(dim, curSpec, priorSpec) : data;
+
+  const leadFitCls = opts.fitTableOnPage
+    ? "print-lead-fit print-lead-keep-table"
+    : "print-lead-fit print-lead-chart-first";
+  let h = '<div class="report-sec print-page print-sec-start">';
+  h += '<div class="'+leadFitCls+'">';
+  h += '<h3>'+escapeHTML(name)+' — 기간 비교</h3>';
+  h += '<div class="report-comment">'+yoyComment(name, summaryData, opts)+'</div>';
+  if(opts.itemChangeAnalysis && summaryData.prev.total > 0){
+    h += increaseItemsAnalysisHTML(keyHeader, summaryData, opts);
+    h += declineItemsAnalysisHTML(keyHeader, summaryData, opts);
+  }
+
+  h += chartBox(chartTitle, chartLegend(barLegend)+bars);
+  if(opts.spanKeys && opts.spanKeys.length){
+    h += multiYearTableHTML(keyHeader, opts.spanKeys, dim, curSpec, prevSpec,
+      tableRows.map(r=>r.k));
+  }else{
+    h += yoyTableHTML(keyHeader, data, tableRows);
+  }
+  h += '</div>';
+  h += '</div>';
+  return h;
+}
+
+function buildReport(){
+  const curSpec = readPeriodInputs("rptCur");
+  const prevSpec = readPeriodInputs("rptPrev");
+  const err = validatePeriod(curSpec, "기준 기간") || validatePeriod(prevSpec, "비교 기간");
+  if(err){ alert(err); return; }
+
+  const spanKeys = reportSpanKeys(curSpec, prevSpec);
+  const curCount = countSavedInRange(curSpec);
+  const prevCount = countSavedInRange(prevSpec);
+  if(spanKeys.length===0){
+    alert("선택한 기간(및 그 사이)에 저장된 월별 데이터가 없습니다.\nCSV를 불러와 [분석 실행]으로 먼저 데이터를 쌓아 주세요.");
+    return;
+  }
+
+  const curLabel = periodLabel(curSpec.year, curSpec.startM, curSpec.endM);
+  const prevLabel = periodLabel(prevSpec.year, prevSpec.startM, prevSpec.endM);
+  const spanLabel = spanLabelFromKeys(spanKeys);
+
+  const custCur = periodAgg(curSpec.year, curSpec.startM, curSpec.endM, "거래처분류집계");
+  const custPrev = periodAgg(prevSpec.year, prevSpec.startM, prevSpec.endM, "거래처분류집계");
+  const itemCur = periodAgg(curSpec.year, curSpec.startM, curSpec.endM, "품목분류집계");
+  const itemPrev = periodAgg(prevSpec.year, prevSpec.startM, prevSpec.endM, "품목분류집계");
+  const purCur = periodAgg(curSpec.year, curSpec.startM, curSpec.endM, "구매_지역요약");
+  const purPrev = periodAgg(prevSpec.year, prevSpec.startM, prevSpec.endM, "구매_지역요약");
+  const priorSpec = priorYearSpec(curSpec);
+  const priorLabel = periodLabel(priorSpec.year, priorSpec.startM, priorSpec.endM);
+  const custPriorY = periodAgg(priorSpec.year, priorSpec.startM, priorSpec.endM, "거래처분류집계");
+  const itemPriorY = periodAgg(priorSpec.year, priorSpec.startM, priorSpec.endM, "품목분류집계");
+  const purPriorY = periodAgg(priorSpec.year, priorSpec.startM, priorSpec.endM, "구매_지역요약");
+
+  const { startM: ymStart, endM: ymEnd } = reportMonthRange(curSpec, prevSpec);
+  const salesYearTotals = spanYearlyPeriodTotals(spanKeys, "거래처분류집계", ymStart, ymEnd);
+  const salesMulti = multiYearMonthlyCompare(spanKeys, "거래처분류집계", curSpec, prevSpec);
+  const purMulti = multiYearMonthlyCompare(spanKeys, "구매_지역요약", curSpec, prevSpec);
+  const multiYearLabel = salesMulti.years.map(y=>y+"년").join(", ");
+
+  const kpi = (label,c,p)=>
+    '<div class="kpi"><div class="k">'+label+'</div><div class="v">'+fmt(c)+' 원</div>'
+    +'<div class="k" style="margin-top:4px" title="'+escapeHTML(priorLabel)+' 대비">전년 대비 <b class="'+((c-p)>=0?"pos":"neg")+'">'+fmtRate(c,p)+'</b></div></div>';
+
+  const curSpan = curSpec.endM - curSpec.startM + 1;
+  const prevSpan = prevSpec.endM - prevSpec.startM + 1;
+
+  let h = '';
+  h += '<div class="print-page print-page-fit print-page-comment-lg print-page1-comment">';
+  h += '<div class="report-head">';
+  h += '<h2>기간 비교 분석 보고서</h2>';
+  h += '<div class="meta">기준 '+curLabel+' vs 비교 '+prevLabel
+     + ' · 포함 구간 '+spanLabel+' ('+spanKeys.length+'개월)'
+     + ' · 생성일 '+new Date().toLocaleString("ko-KR")
+     + ' · 입력 기간 저장 '+curCount+'/'+curSpan+'개월 (비교 '+prevCount+'/'+prevSpan+'개월)</div>';
+  h += '</div>';
+
+  h += '<div class="summary">'
+     + kpi("거래처 기준 총매출", custCur.total, custPriorY.total)
+     + kpi("품목 기준 총매출", itemCur.total, itemPriorY.total)
+     + kpi("총 구매액", purCur.total, purPriorY.total)
+     + '</div>';
+
+  if(salesYearTotals.length>=1){
+    h += '<div class="report-sec"><h3>연도별 합계 비교 ('+escapeHTML(spanLabel)+')</h3>';
+    h += '<div class="report-comment">'
+       + spanTrendComment("매출(거래처 기준)", spanKeys, "거래처분류집계", curSpec)
+       + spanTrendComment("구매", spanKeys, "구매_지역요약", curSpec)
+       + '</div>';
+    h += '<div class="print-charts-v yearly-monthly-charts">';
+    h += yearlyTotalBarChart("연도별 매출 합계", spanKeys, "거래처분류집계", ymStart, ymEnd, curSpec);
+    h += yearlyTotalBarChart("연도별 구매 합계", spanKeys, "구매_지역요약", ymStart, ymEnd, curSpec);
+    h += '</div></div>';
+  }
+
+  h += '</div>';
+
+  h += '<div class="print-page print-sec-start print-page-fit print-page-comment-lg">';
+  h += '<div class="report-sec"><h3>동월 비교 ('+escapeHTML(multiYearLabel)+')</h3>';
+  h += '<div class="report-comment">'
+     + monthlyTrendComment("매출(거래처 기준)", custCur, custPriorY)
+     + monthlyTrendComment("구매", purCur, purPriorY)
+     + '</div>';
+  h += '<div class="print-charts-v same-month-charts">';
+  const multiH = Math.max(260, salesMulti.years.length*24+180);
+  const salesMultiTbl = chartDataTableHTML("월", salesMulti.labels, chartTableYearSeries(salesMulti),
+    {showRowTotal:false, yoyCurSpec: curSpec});
+  const purMultiTbl = chartDataTableHTML("월", purMulti.labels, chartTableYearSeries(purMulti),
+    {showRowTotal:false, yoyCurSpec: curSpec});
+  h += chartBox("동월 매출 비교", chartLegend(salesMulti.series)+svgBars(salesMulti.labels, salesMulti.series, multiH), salesMultiTbl);
+  h += chartBox("동월 구매 비교", chartLegend(purMulti.series)+svgBars(purMulti.labels, purMulti.series, multiH), purMultiTbl);
+  h += '</div></div></div>';
+
+  h += reportSection("품목별 판매", "품목분류집계", "품목분류명", curSpec, prevSpec, {
+    minChartAmount: 9000000, spanKeys, topN: 8, itemChangeAnalysis: true, fitTableOnPage: true
+  });
+  h += reportSection("거래처별 판매", "거래처분류집계", "거래처분류명", curSpec, prevSpec, {
+    spanKeys, priorYearSummary: true, fitTableOnPage: false
+  });
+  h += reportSection("거래처별 구매", "구매_거래처별", "거래처명", curSpec, prevSpec, {
+    spanKeys, priorYearSummary: true, fitTableOnPage: false, topN: 10, limitTableToTop: true
+  });
+
+  $("reportBody").innerHTML = h;
+  lastReportExport = { curSpec, prevSpec, spanKeys, spanLabel, curLabel, prevLabel };
+  showAppPage("pageReport", { showReport: true });
+  requestAnimationFrame(()=>requestAnimationFrame(fitReportScreenLayout));
+  $("report").scrollIntoView({behavior:"smooth", block:"start"});
+  logStatus(curLabel+" vs "+prevLabel+" 보고서 생성 (포함: "+spanLabel+", "+spanKeys.length+"개월).");
+}
+
+/* ===== 인쇄 / PDF ===== */
+/* A4(297mm) − @page여백(20mm) − 브라우저 머리글/바닥글(≈35mm) */
+const PRINT_PAGE_HEIGHT_MM = 252;
+const PRINT_MM_TO_PX = 96 / 25.4;
+
+const PRINT_CHART_MIN_MM = 18;
+const PRINT_CHART_MAX_MM = 120;
+const PRINT_PAGE_PAD_PX = 6;
+
+function printPageHeightPx(){
+  return PRINT_PAGE_HEIGHT_MM * PRINT_MM_TO_PX;
+}
+
+function printPageChartCount(page){
+  return page.querySelectorAll("svg.chart").length;
+}
+
+function preparePrintCharts(){
+  document.querySelectorAll("#report .chart-scroll").forEach(wrap=>{
+    const inner = wrap.firstElementChild;
+    if(!inner) return;
+    if(!inner.dataset.printOrigWidth){
+      inner.dataset.printOrigWidth = inner.style.width || "";
+    }
+    inner.style.width = "100%";
+    inner.style.maxWidth = "100%";
+  });
+  document.querySelectorAll("#report svg.chart").forEach(svg=>{
+    if(!svg.dataset.printPrepared){
+      svg.dataset.printOrigWidth = svg.getAttribute("width") || "";
+      svg.dataset.printOrigHeight = svg.getAttribute("height") || "";
+      svg.dataset.printPrepared = "1";
+    }
+    svg.removeAttribute("width");
+    svg.removeAttribute("height");
+    svg.style.width = "100%";
+    svg.style.height = "auto";
+    svg.style.maxWidth = "100%";
+    svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  });
+}
+
+function applyPrintChartSize(page, mm){
+  page.dataset.chartMaxMm = String(mm);
+  page.querySelectorAll("svg.chart").forEach(svg=>{
+    svg.style.maxHeight = mm + "mm";
+    svg.style.height = mm + "mm";
+  });
+}
+
+function chartsRenderedHeight(page){
+  let h = 0;
+  page.querySelectorAll("svg.chart").forEach(svg=>{
+    h += svg.getBoundingClientRect().height;
+  });
+  return h;
+}
+
+function shrinkOverflowTables(root){
+  root.querySelectorAll("table").forEach(tbl=>{
+    if(!tbl.dataset.printBaseFs){
+      tbl.dataset.printBaseFs = getComputedStyle(tbl).fontSize;
+    }
+    let fs = parseFloat(tbl.dataset.printBaseFs) || 9;
+    const wrap = tbl.closest(".tablewrap, .chart-datatable") || tbl.parentElement;
+    if(!wrap) return;
+    let guard = 0;
+    while(tbl.scrollWidth > wrap.clientWidth + 2 && fs > 6.5 && guard < 12){
+      fs -= 0.5;
+      tbl.style.fontSize = fs + "px";
+      guard++;
+    }
+  });
+}
+
+function printPageUsedPx(page, targetPx){
+  const pageTop = page.getBoundingClientRect().top;
+  let bottom = 0;
+  page.querySelectorAll(
+    ".report-head, .summary, .report-comment, .report-increase, .report-decline, "
+    + "h3, h4, .chartbox, .chart-datatable, .tablewrap, .vendor-region-legend"
+  ).forEach(el=>{
+    const rect = el.getBoundingClientRect();
+    if(rect.height > 0){
+      bottom = Math.max(bottom, Math.min(rect.bottom - pageTop, targetPx));
+    }
+  });
+  return bottom;
+}
+
+function leadPageUsedPx(page, targetPx){
+  const pageTop = page.getBoundingClientRect().top;
+  const keepTable = page.classList.contains("print-lead-keep-table");
+  const selectors = keepTable
+    ? ".chartbox, .report-comment, .report-increase, .report-decline, h3, h4, .tablewrap, .vendor-region-legend"
+    : ".chartbox, .report-comment, .report-increase, .report-decline, h3, h4";
+  let bottom = 0;
+  page.querySelectorAll(selectors).forEach(el=>{
+    const rect = el.getBoundingClientRect();
+    if(rect.height > 0){
+      bottom = Math.max(bottom, Math.min(rect.bottom - pageTop, targetPx));
+    }
+  });
+  return bottom;
+}
+
+function chartBoxChromePx(chartbox){
+  const svg = chartbox.querySelector("svg.chart");
+  if(!svg) return chartbox.getBoundingClientRect().height;
+  return Math.max(0, chartbox.getBoundingClientRect().height - svg.getBoundingClientRect().height);
+}
+
+function leadTableReservePx(page){
+  let h = 0;
+  page.querySelectorAll(".tablewrap, .vendor-region-legend").forEach(el=>{
+    h += el.getBoundingClientRect().height;
+  });
+  return h + 6;
+}
+
+function printChartMaxCapMm(page){
+  if(page.classList.contains("print-page1-comment")) return 82;
+  if(page.classList.contains("print-lead-keep-table")) return 72;
+  if(page.classList.contains("print-lead-chart-first")) return 110;
+  if(page.classList.contains("print-page-comment-lg")) return 76;
+  return PRINT_CHART_MAX_MM;
+}
+
+function fitOnePrintPage(page, targetPx){
+  const charts = [...page.querySelectorAll("svg.chart")];
+  if(!charts.length){
+    shrinkOverflowTables(page);
+    return;
+  }
+
+  const isLead = page.classList.contains("print-lead-fit");
+  const keepTable = page.classList.contains("print-lead-keep-table");
+  const chartMaxCap = printChartMaxCapMm(page);
+  const shouldFill = page.classList.contains("print-page-fit") || isLead;
+
+  applyPrintChartSize(page, PRINT_CHART_MIN_MM);
+  shrinkOverflowTables(page);
+
+  const pageTop = page.getBoundingClientRect().top;
+  const chartStack = page.querySelector(".print-charts-v");
+  let fixedPx;
+  let fitCount = charts.length;
+
+  if(chartStack){
+    fixedPx = chartStack.getBoundingClientRect().top - pageTop;
+    const stackCharts = chartStack.querySelectorAll("svg.chart");
+    fitCount = Math.max(1, stackCharts.length);
+  }else if(isLead){
+    const firstChartBox = page.querySelector(".chartbox");
+    fixedPx = firstChartBox
+      ? firstChartBox.getBoundingClientRect().top - pageTop
+      : page.offsetHeight - chartsRenderedHeight(page);
+    fitCount = 1;
+  }else{
+    fixedPx = page.offsetHeight - chartsRenderedHeight(page);
+  }
+
+  const stackChrome = chartStack
+    ? chartStack.offsetHeight - chartsRenderedHeight(chartStack)
+    : 0;
+  let leadReserve = 0;
+  if(isLead){
+    const firstChartBox = page.querySelector(".chartbox");
+    const chrome = firstChartBox ? chartBoxChromePx(firstChartBox) : 0;
+    leadReserve = chrome + (keepTable ? leadTableReservePx(page) * 0.9 : 0);
+  }
+  const availPx = targetPx - fixedPx - stackChrome - leadReserve - PRINT_PAGE_PAD_PX;
+  let maxMm = Math.min(
+    chartMaxCap,
+    Math.max(PRINT_CHART_MIN_MM, (availPx / fitCount) / PRINT_MM_TO_PX)
+  );
+
+  applyPrintChartSize(page, maxMm);
+  shrinkOverflowTables(page);
+
+  const pageUsed = ()=> isLead ? leadPageUsedPx(page, targetPx) : printPageUsedPx(page, targetPx);
+
+  let guard = 0;
+  while(pageUsed() > targetPx + PRINT_PAGE_PAD_PX
+    && maxMm > PRINT_CHART_MIN_MM && guard < 60){
+    maxMm -= 1;
+    applyPrintChartSize(page, maxMm);
+    guard++;
+  }
+
+  if(shouldFill){
+    guard = 0;
+    while(pageUsed() < targetPx - PRINT_PAGE_PAD_PX
+      && maxMm < chartMaxCap && guard < 100){
+      const prevUsed = pageUsed();
+      maxMm += 1;
+      applyPrintChartSize(page, maxMm);
+      if(pageUsed() <= prevUsed + 0.5){
+        page.querySelectorAll("svg.chart").forEach(svg=>{
+          svg.style.height = maxMm + "mm";
+        });
+      }
+      if(pageUsed() > targetPx + PRINT_PAGE_PAD_PX){
+        maxMm -= 1;
+        applyPrintChartSize(page, maxMm);
+        break;
+      }
+      guard++;
+    }
+    distributePrintPageSlack(page, targetPx, isLead);
+  }
+
+  shrinkOverflowTables(page);
+}
+
+function distributePrintPageSlack(page, targetPx, isLead){
+  const used = ()=> isLead ? leadPageUsedPx(page, targetPx) : printPageUsedPx(page, targetPx);
+  let slack = targetPx - used();
+  if(slack <= PRINT_PAGE_PAD_PX) return;
+
+  const chartN = printPageChartCount(page);
+  if(!chartN) return;
+
+  const curMm = parseFloat(page.dataset.chartMaxMm) || PRINT_CHART_MIN_MM;
+  const capMm = printChartMaxCapMm(page);
+  const extraMm = Math.min((slack / chartN) / PRINT_MM_TO_PX, capMm - curMm);
+  if(extraMm >= 0.5){
+    let newMm = curMm + extraMm;
+    applyPrintChartSize(page, newMm);
+    while(used() > targetPx + PRINT_PAGE_PAD_PX && newMm > PRINT_CHART_MIN_MM){
+      newMm -= 1;
+      applyPrintChartSize(page, newMm);
+    }
+    slack = targetPx - used();
+  }
+
+  if(slack > PRINT_PAGE_PAD_PX){
+    const gapCap = page.classList.contains("print-page1-comment") ? 14 : 10;
+    page.querySelectorAll(".print-charts-v").forEach(area=>{
+      area.style.gap = Math.min(slack / PRINT_MM_TO_PX / Math.max(chartN, 1), gapCap) + "mm";
+    });
+  }
+}
+
+function fitPrintPages(){
+  const targetPx = printPageHeightPx();
+  document.querySelectorAll("#report .print-page-fit, #report .print-lead-fit").forEach(page=>{
+    fitOnePrintPage(page, targetPx);
+  });
+}
+
+function preparePrintTables(){
+  document.querySelectorAll("#report .tablewrap").forEach(wrap=>{
+    wrap.style.maxHeight = "none";
+    wrap.style.overflow = "visible";
+    const tbl = wrap.querySelector("table");
+    if(!tbl) return;
+    tbl.style.width = "100%";
+    tbl.style.tableLayout = "auto";
+    if(!tbl.dataset.printBaseFs){
+      const cols = tbl.querySelectorAll("thead th").length;
+      const base = cols > 10 ? 7.5 : cols > 7 ? 8.5 : 9;
+      tbl.dataset.printBaseFs = base + "px";
+    }
+    tbl.style.fontSize = tbl.dataset.printBaseFs;
+  });
+  document.querySelectorAll("#report .chart-datatable table").forEach(tbl=>{
+    if(!tbl.dataset.printBaseFs) tbl.dataset.printBaseFs = "9px";
+    tbl.style.fontSize = tbl.dataset.printBaseFs;
+  });
+}
+
+function preparePrintLayout(){
+  document.body.classList.add("print-report");
+  preparePrintCharts();
+  document.querySelectorAll("#report .print-page-fit, #report .print-lead-fit").forEach(page=>{
+    applyPrintChartSize(page, PRINT_CHART_MIN_MM);
+  });
+  preparePrintTables();
+  fitPrintPages();
+}
+
+function restorePrintLayout(){
+  document.body.classList.remove("print-report");
+  document.querySelectorAll("#report .chart-scroll > div").forEach(inner=>{
+    if("printOrigWidth" in inner.dataset){
+      inner.style.width = inner.dataset.printOrigWidth;
+      inner.style.maxWidth = "";
+      delete inner.dataset.printOrigWidth;
+    }
+  });
+  document.querySelectorAll("#report svg.chart").forEach(svg=>{
+    if(svg.dataset.printPrepared){
+      if(svg.dataset.printOrigWidth) svg.setAttribute("width", svg.dataset.printOrigWidth);
+      else svg.removeAttribute("width");
+      if(svg.dataset.printOrigHeight) svg.setAttribute("height", svg.dataset.printOrigHeight);
+      else svg.removeAttribute("height");
+      svg.style.width = "";
+      svg.style.height = "";
+      svg.style.maxWidth = "";
+      svg.style.maxHeight = "";
+      delete svg.dataset.printPrepared;
+      delete svg.dataset.printOrigWidth;
+      delete svg.dataset.printOrigHeight;
+    }
+  });
+  document.querySelectorAll("#report table").forEach(tbl=>{
+    tbl.style.fontSize = "";
+    tbl.style.width = "";
+    tbl.style.tableLayout = "";
+    delete tbl.dataset.printBaseFs;
+  });
+  document.querySelectorAll("#report .tablewrap").forEach(wrap=>{
+    wrap.style.maxHeight = "";
+    wrap.style.overflow = "";
+  });
+  document.querySelectorAll("#report .print-page").forEach(page=>{
+    delete page.dataset.chartMaxMm;
+    page.style.width = "";
+    page.style.maxWidth = "";
+    page.style.margin = "";
+  });
+  document.querySelectorAll("#report .print-charts-v").forEach(area=>{
+    area.style.gap = "";
+  });
+  document.querySelectorAll("#report .report-comment").forEach(el=>{
+    el.style.fontSize = "";
+  });
+}
+
+function ensureReportReady(){
+  const body = $("reportBody");
+  if(!body || !body.innerHTML.trim()){
+    alert("먼저 [분석 보고서 생성]을 눌러 보고서를 만드세요.");
+    return false;
+  }
+  return true;
+}
+
+function launchReportPrint(){
+  showAppPage("pageReport", { showReport: true });
+  const reportEl = $("report");
+  if(reportEl) reportEl.classList.remove("hide");
+  preparePrintLayout();
+  const cleanup = ()=>{
+    restorePrintLayout();
+    window.removeEventListener("afterprint", cleanup);
+  };
+  window.addEventListener("afterprint", cleanup);
+  requestAnimationFrame(()=>{
+    requestAnimationFrame(()=>{
+      fitPrintPages();
+      window.print();
+    });
+  });
+}
+
+function printReport(){
+  if(!ensureReportReady()) return;
+  launchReportPrint();
+}
+
+function savePdfReport(){
+  if(!ensureReportReady()) return;
+  launchReportPrint();
+}
+
+async function exportReportExcel(){
+  if(!ensureReportReady()) return;
+  if(!lastReportExport){
+    alert("보고서 데이터가 없습니다.\n[분석 보고서 생성]을 다시 실행해 주세요.");
+    return;
+  }
+  const btn = $("saveExcelReportBtn");
+  if(btn) btn.disabled = true;
+  try{
+    const { curSpec, prevSpec, spanKeys, curLabel, prevLabel } = lastReportExport;
+    const tables = buildReportExportTables(curSpec, prevSpec, spanKeys);
+    if(!tables.length){
+      alert("엑셀로보낼 표가 없습니다.");
+      return;
+    }
+    logStatus("차트 이미지 생성 중…");
+    await attachReportChartImages(tables, curSpec, prevSpec, spanKeys);
+    const chartN = tables.reduce((n, t)=>n + (t.charts ? t.charts.length : 0), 0);
+    const tag = reportExportFilenameTag(curSpec, prevSpec);
+    const res = await downloadExcelReportHtml(tables, tag);
+    if(!res.ok) return;
+    let msg = curLabel+" vs "+prevLabel+" 보고서 — 엑셀 1시트 (표 "+tables.length+"개 구간";
+    if(chartN) msg += ", 차트 "+chartN+"개";
+    msg += ")";
+    if(res.folder) msg += " — 다운로드 폴더 열림";
+    if(res.filesDir) msg += " (차트 이미지: *_files 폴더)";
+    logStatus(msg);
+  }finally{
+    if(btn) btn.disabled = false;
+  }
+}
+
+/* ===== 시작 ===== */
+
+function initReportPeriodDefaults(){
+  const n = new Date();
+  const y = n.getFullYear(), m = n.getMonth() + 1;
+  if($("rptCurYear")) $("rptCurYear").value = y;
+  if($("rptCurStart")) $("rptCurStart").value = 1;
+  if($("rptCurEnd")) $("rptCurEnd").value = m;
+  if($("rptPrevYear")) $("rptPrevYear").value = y - 1;
+  if($("rptPrevStart")) $("rptPrevStart").value = 1;
+  if($("rptPrevEnd")) $("rptPrevEnd").value = m;
+}
+
+function bindAppControls(){
+  on("savedYearSel", "change", ()=>{
+    fillSavedMonthSelect($("savedYearSel").value);
+    const countEl = $("savedMonthCount");
+    if(countEl){
+      const y = $("savedYearSel").value;
+      const n = monthsOfYear(y).length;
+      countEl.textContent = "(저장 "+savedMonthKeys().length+"개월 · "+y+"년 "+n+"개월)";
+    }
+  });
+  on("savedMonthViewBtn", "click", ()=>{
+    const mk = $("savedMonthSel").value;
+    if(mk) loadMonth(mk);
+  });
+  on("savedMonthDelBtn", "click", ()=>{
+    const mk = $("savedMonthSel").value;
+    if(mk) deleteMonth(mk);
+  });
+  on("savedAnnualBtn", "click", ()=>{
+    const y = $("savedYearSel").value;
+    if(y) buildAnnual(y);
+  });
+  on("runBtn", "click", runAnalysis);
+  on("xlsBtn", "click", exportExcel);
+  on("saveMonthBtn", "click", saveCurrentMonth);
+  on("buildReportBtn", "click", buildReport);
+  on("printReportBtn", "click", printReport);
+  on("savePdfReportBtn", "click", savePdfReport);
+  on("saveExcelReportBtn", "click", exportReportExcel);
+  on("closeReportBtn", "click", ()=>{ $("report").classList.add("hide"); });
+}
+
+async function initApp(){
+  const verEl = $("appVersionLabel");
+  if(verEl) verEl.textContent = APP_VERSION;
+  const authorEl = $("appAuthorLabel");
+  if(authorEl) authorEl.textContent = APP_AUTHOR;
+  bindNavButtons();
+  loadStoredMaps();
+  loadStoredBrands();
+  renderBrands();
+  bindCategoryControls();
+  renderCategoryPanels();
+  initReportPeriodDefaults();
+  bindAppControls();
+
+  await restoreSession();
+  renderCategoryPanels();
+  /* 저장데이터/months.json 이 있으면 항상 우선 (다른 PC 이전 시 localStorage 불일치 방지) */
+  await loadMonthsFromDisk();
+  renderSavedMonths();
+  updateXlsBtnState();
+}
+
+initApp();
 </script>
 </body>
 </html>

@@ -1,0 +1,77 @@
+==========================================
+  매출 분석 프로그램 — 오픈소스·라이선스 고지
+  앱 버전: 1.0.0
+==========================================
+
+본 문서는 「매출 분석 프로그램」(Windows EXE 배포본)에서 사용하는
+오픈소스 소프트웨어를 정리한 안내입니다.
+법적 효력·최신 상태는 각 프로젝트의 공식 라이선스 전문을 우선합니다.
+
+
+■ 1. 응용 프로그램 소스 코드
+
+  매출분석.html, app_launcher.py 등 본 프로그램의 응용 소스 코드에 대한
+  권리는 개발·보유 주체에 귀속됩니다.
+  무단 복제·배포를 금합니다.
+
+
+■ 2. 화면(프론트엔드) JavaScript
+
+  분석 화면·차트(SVG)·표 렌더링은 외부 CDN·npm 라이브러리 없이
+  순수 JavaScript로 작성되었습니다.
+  (Chart.js, jQuery, React 등 미사용)
+
+
+■ 3. 배포본(EXE)에 포함되는 오픈소스 (Python 패키지)
+
+  ┌────────────────┬──────────┬─────────────────────────────────────┐
+  │ 이름           │ 라이선스 │ 용도                                │
+  ├────────────────┼──────────┼─────────────────────────────────────┤
+  │ Python         │ PSF      │ 프로그램 실행 환경 (EXE에 동봉)     │
+  │ pywebview      │ BSD-3    │ 독립 창·화면 표시                   │
+  │ openpyxl       │ MIT      │ 엑셀(xlsx) 저장·차트 이미지 삽입    │
+  │ et-xmlfile     │ MIT      │ openpyxl 의존 라이브러리            │
+  │ Pillow (PIL)   │ MIT-CMU  │ 엑셀 차트용 PNG 이미지 처리         │
+  │ PyInstaller    │ GPL+예외 │ EXE 패키징 부트로더 (빌드·동봉)     │
+  └────────────────┴──────────┴─────────────────────────────────────┘
+
+  · pywebview  — https://github.com/r0x0r/pywebview
+  · openpyxl   — https://foss.heptapod.net/openpyxl/openpyxl
+  · Pillow     — https://github.com/python-pillow/Pillow
+  · PyInstaller— https://pyinstaller.org
+               (GPL v2 + linking exception: 비(非)GPL 프로그램 패키징 허용)
+  · Python     — https://www.python.org/psf/license/
+
+
+■ 4. 운영 체제·런타임 (별도 설치·동봉)
+
+  · Microsoft Edge WebView2 — pywebview 가 Windows 에서 화면을 표시할 때 사용
+    (Windows 10/11 에 기본 포함되거나 별도 런타임 설치 필요)
+  · Microsoft Windows — 운영 체제
+
+
+■ 5. 개발·빌드 시에만 사용 (일반 사용자 PC 불필요)
+
+  · PyInstaller (빌드 도구)
+  · pip 패키지 관리자
+
+  개발 PC에서 앱빌드.bat 실행 시에만 사용하며,
+  다른 PC에 Python 을 설치하지 않아도 EXE 로 실행 가능합니다.
+
+
+■ 6. 고지 의무 (요약)
+
+  위 오픈소스를 사용함에 따라 각 라이선스의 저작권 표시·고지 조건을
+  준수합니다. 본 파일 및 프로그램 내 「오픈소스·라이선스」 화면이
+  그 고지를 위한 문서입니다.
+
+  MIT / BSD 계열: 저작권·라이선스 문구 유지
+  Python (PSF):   PSF 라이선스 조건 준수
+  PyInstaller:    GPL 및 부트로더 예외 조항 준수
+
+
+■ 7. 문의
+
+  라이선스·고지 관련 문의는 프로그램 관리 담당자에게 연락해 주세요.
+
+  문서 갱신: 2026-06-12
