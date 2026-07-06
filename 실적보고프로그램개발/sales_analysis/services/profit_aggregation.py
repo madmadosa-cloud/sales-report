@@ -17,6 +17,7 @@ from sales_analysis.constants import (
     SIMPLE_MERGED_LABEL,
     STANDARD_CUSTOMER_CODES,
     UNCLASSIFIED_LABEL,
+    WELFARE_ETC_GROUP_ID,
 )
 from sales_analysis.models import ProfitRecord
 from sales_analysis.services.aggregation import effective_customer_code
@@ -39,6 +40,7 @@ from sales_analysis.services.welfare_service import (
 
 UNCLASSIFIED_CUSTOMER_KEY = "__unclassified_customer__"
 UNCLASSIFIED_ITEM_KEY = "__unclassified_item__"
+PROFIT_ETC_SUMMARY_CODE = "__profit_etc_summary__"
 
 
 def _empty_bucket_cell() -> dict:
@@ -69,7 +71,7 @@ class ProfitReport:
 
     @property
     def axis_label(self) -> str:
-        return "출력항목" if self.is_welfare else "품목분류"
+        return "출력항목" if (self.is_welfare or self.is_final) else "품목분류"
 
 
 def _aggregate_profit_totals(qs: QuerySet[ProfitRecord]) -> dict[str, Decimal]:
@@ -176,6 +178,7 @@ def _build_bucket(
         bucket = _remap_bucket_for_welfare_items(bucket)
     elif final:
         bucket = _remap_bucket_for_final_customers(bucket)
+        bucket = _remap_bucket_for_welfare_items(bucket)
     return bucket
 
 
@@ -185,6 +188,66 @@ def _item_label(item_key: str, *, welfare: bool, item_categories: dict[str, str]
     if item_key == UNCLASSIFIED_ITEM_KEY:
         return UNCLASSIFIED_LABEL
     return item_categories.get(item_key, resolve_item_category_name(item_key))
+
+
+def _profit_trailing_etc_key(
+    *,
+    welfare: bool,
+    final: bool,
+    item_categories: dict[str, str],
+) -> str | None:
+    if welfare or final:
+        return WELFARE_ETC_GROUP_ID
+    for code, name in item_categories.items():
+        if name == "기타":
+            return code
+    if "z" in item_categories:
+        return "z"
+    return None
+
+
+def _split_item_order(item_order: list[str], etc_key: str | None) -> tuple[list[str], str | None]:
+    if not etc_key or etc_key not in item_order:
+        return item_order, None
+    main_order = [code for code in item_order if code != etc_key]
+    return main_order, etc_key
+
+
+def _metrics_from_cell(cell: dict) -> dict[str, Decimal]:
+    return {
+        "quantity": cell.get("quantity", Decimal("0")),
+        "cost": cell.get("cost", Decimal("0")),
+        "amount": cell.get("amount", Decimal("0")),
+    }
+
+
+def _accumulate_metrics(target: dict[str, Decimal], source: dict[str, Decimal]) -> None:
+    target["quantity"] += source["quantity"]
+    target["cost"] += source["cost"]
+    target["amount"] += source["amount"]
+
+
+def _profit_row_from_metrics(
+    *,
+    customer_label: str,
+    item_label: str,
+    metrics: dict[str, Decimal],
+    customer_code: str = "",
+    item_code: str = "",
+    row_type: str = "item",
+) -> ProfitRow:
+    return ProfitRow(
+        customer_label=customer_label,
+        item_label=item_label,
+        quantity=metrics["quantity"],
+        cost=metrics["cost"],
+        cost_thousand=_to_thousand(metrics["cost"]),
+        amount=metrics["amount"],
+        amount_thousand=_to_thousand(metrics["amount"]),
+        row_type=row_type,
+        customer_code=customer_code,
+        item_code=item_code,
+    )
 
 
 def build_profit_report(
@@ -200,7 +263,13 @@ def build_profit_report(
     bucket = _build_bucket(qs, welfare=welfare, final=final)
     customer_categories = get_customer_category_map()
     item_categories = get_item_category_map()
-    item_order = get_welfare_group_order() if welfare else get_item_category_order()
+    item_order = get_welfare_group_order() if (welfare or final) else get_item_category_order()
+    use_welfare_axis = welfare or final
+    etc_key = _profit_trailing_etc_key(
+        welfare=welfare, final=final, item_categories=item_categories
+    )
+    main_item_order, trailing_etc_key = _split_item_order(item_order, etc_key)
+    etc_label = "기타"
     if final:
         customer_order = FINAL_CUSTOMER_ORDER
     elif welfare:
@@ -214,6 +283,11 @@ def build_profit_report(
 
     report_rows: list[ProfitRow] = []
     db_totals = _aggregate_profit_totals(qs)
+    global_etc_metrics: dict[str, Decimal] = {
+        "quantity": Decimal("0"),
+        "cost": Decimal("0"),
+        "amount": Decimal("0"),
+    }
 
     def append_section(cust_key: str, cust_name: str) -> None:
         section_qty = Decimal("0")
@@ -221,64 +295,54 @@ def build_profit_report(
         section_amount = Decimal("0")
         section_items: list[ProfitRow] = []
 
-        for item_key in item_order:
+        for item_key in main_item_order:
             cell = bucket.get((cust_key, item_key), {})
-            qty = cell.get("quantity", Decimal("0"))
-            cost = cell.get("cost", Decimal("0"))
-            amount = cell.get("amount", Decimal("0"))
-            section_qty += qty
-            section_cost += cost
-            section_amount += amount
+            metrics = _metrics_from_cell(cell)
+            section_qty += metrics["quantity"]
+            section_cost += metrics["cost"]
+            section_amount += metrics["amount"]
             section_items.append(
-                ProfitRow(
+                _profit_row_from_metrics(
                     customer_label=cust_name,
-                    item_label=_item_label(item_key, welfare=welfare, item_categories=item_categories),
-                    quantity=qty,
-                    cost=cost,
-                    cost_thousand=_to_thousand(cost),
-                    amount=amount,
-                    amount_thousand=_to_thousand(amount),
-                    row_type="item",
+                    item_label=_item_label(
+                        item_key,
+                        welfare=use_welfare_axis,
+                        item_categories=item_categories,
+                    ),
+                    metrics=metrics,
                     customer_code=cust_key,
                     item_code=item_key,
                 )
             )
 
-        if not welfare:
+        if trailing_etc_key:
+            etc_cell = bucket.get((cust_key, trailing_etc_key), {})
+            etc_metrics = _metrics_from_cell(etc_cell)
+            section_qty += etc_metrics["quantity"]
+            section_cost += etc_metrics["cost"]
+            section_amount += etc_metrics["amount"]
+            _accumulate_metrics(global_etc_metrics, etc_metrics)
+
+        if not use_welfare_axis:
             unitem = bucket.get((cust_key, UNCLASSIFIED_ITEM_KEY), {})
-            uqty = unitem.get("quantity", Decimal("0"))
-            ucost = unitem.get("cost", Decimal("0"))
-            uamount = unitem.get("amount", Decimal("0"))
-            if uqty or ucost or uamount:
-                section_qty += uqty
-                section_cost += ucost
-                section_amount += uamount
-                section_items.append(
-                    ProfitRow(
-                        customer_label=cust_name,
-                        item_label=UNCLASSIFIED_LABEL,
-                        quantity=uqty,
-                        cost=ucost,
-                        cost_thousand=_to_thousand(ucost),
-                        amount=uamount,
-                        amount_thousand=_to_thousand(uamount),
-                        row_type="item",
-                        customer_code=cust_key,
-                        item_code=UNCLASSIFIED_ITEM_KEY,
-                    )
-                )
+            unclassified_metrics = _metrics_from_cell(unitem)
+            if unclassified_metrics["quantity"] or unclassified_metrics["cost"] or unclassified_metrics["amount"]:
+                section_qty += unclassified_metrics["quantity"]
+                section_cost += unclassified_metrics["cost"]
+                section_amount += unclassified_metrics["amount"]
+                _accumulate_metrics(global_etc_metrics, unclassified_metrics)
 
         report_rows.append(
-            ProfitRow(
+            _profit_row_from_metrics(
                 customer_label=cust_name,
                 item_label="소계",
-                quantity=section_qty,
-                cost=section_cost,
-                cost_thousand=_to_thousand(section_cost),
-                amount=section_amount,
-                amount_thousand=_to_thousand(section_amount),
-                row_type="subtotal",
+                metrics={
+                    "quantity": section_qty,
+                    "cost": section_cost,
+                    "amount": section_amount,
+                },
                 customer_code=cust_key,
+                row_type="subtotal",
             )
         )
         report_rows.extend(section_items)
@@ -302,6 +366,26 @@ def build_profit_report(
         )
         if uncust:
             append_section(UNCLASSIFIED_CUSTOMER_KEY, UNCLASSIFIED_LABEL)
+
+    if global_etc_metrics["quantity"] or global_etc_metrics["cost"] or global_etc_metrics["amount"]:
+        report_rows.append(
+            _profit_row_from_metrics(
+                customer_label=etc_label,
+                item_label="소계",
+                metrics=global_etc_metrics,
+                customer_code=PROFIT_ETC_SUMMARY_CODE,
+                row_type="subtotal",
+            )
+        )
+        report_rows.append(
+            _profit_row_from_metrics(
+                customer_label=etc_label,
+                item_label=etc_label,
+                metrics=global_etc_metrics,
+                customer_code=PROFIT_ETC_SUMMARY_CODE,
+                item_code=trailing_etc_key or WELFARE_ETC_GROUP_ID,
+            )
+        )
 
     total_row = ProfitRow(
         customer_label="총계",

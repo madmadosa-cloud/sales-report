@@ -16,6 +16,7 @@ from sales_analysis.constants import (
 from sales_analysis.models import SalesRecord
 
 from sales_analysis.services.aggregation import (
+    SALES_ETC_SUMMARY_CODE,
     belongs_in_merged_group,
     build_sales_report,
     effective_customer_code,
@@ -160,6 +161,47 @@ class SimpleReportTest(TestCase):
         self.assertNotIn("a", {r.item_code for r in final_item_rows})
         self.assertIn("office", {r.item_code for r in final_item_rows})
         self.assertIn("사무문구", {r.item_label for r in final_item_rows})
+
+    def test_sales_etc_aggregated_at_bottom(self):
+        rows = [
+            ("a", "a", "a", 1, 1000),
+            ("b", "z", "z", 2, 2000),
+            ("e", "z", "z", 3, 3000),
+        ]
+        for cust, item, item_cat, qty, total in rows:
+            SalesRecord.objects.create(
+                year=2025,
+                month=1,
+                voucher_no=f"v-{cust}-{item}",
+                item_code=f"{item}001",
+                item_category_code=item_cat,
+                customer_category_code=cust,
+                quantity=Decimal(qty),
+                total=Decimal(total),
+                is_unclassified_customer=cust not in ("a", "b", "c", "d", "e", "z"),
+                is_unclassified_item=item_cat not in get_seed_item_codes(),
+            )
+
+        qs = SalesRecord.objects.filter(year=2025, month=1)
+        for report in (
+            build_sales_report(qs, 2025, 1, 1),
+            build_sales_report(qs, 2025, 1, 1, simple=True),
+            build_sales_report(qs, 2025, 1, 1, welfare=True),
+            build_sales_report(qs, 2025, 1, 1, final=True),
+        ):
+            etc_rows = [r for r in report.rows if r.customer_code == SALES_ETC_SUMMARY_CODE]
+            self.assertEqual(len(etc_rows), 2, report.period_label)
+            self.assertEqual(etc_rows[1].total.count, 2)
+            self.assertEqual(etc_rows[1].total.amount_thousand, 5)
+            self.assertEqual(report.rows[-1].customer_code, SALES_ETC_SUMMARY_CODE)
+            self.assertFalse(
+                any(
+                    r.row_type == "item"
+                    and r.item_code in ("z", "etc")
+                    and r.customer_code != SALES_ETC_SUMMARY_CODE
+                    for r in report.rows
+                )
+            )
 
 
 def get_seed_item_codes():

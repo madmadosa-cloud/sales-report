@@ -23,6 +23,7 @@ from sales_analysis.constants import (
     SIMPLE_MERGED_LABEL,
     STANDARD_CUSTOMER_CODES,
     UNCLASSIFIED_LABEL,
+    WELFARE_ETC_GROUP_ID,
 )
 from sales_analysis.models import SalesRecord
 from sales_analysis.services.master_service import (
@@ -93,6 +94,9 @@ class SalesReport:
     is_simple: bool = False
     is_welfare: bool = False
     is_final: bool = False
+
+
+SALES_ETC_SUMMARY_CODE = "__sales_etc_summary__"
 
 
 def belongs_in_merged_group(
@@ -287,6 +291,107 @@ def _accumulate_month_cell(target: dict[int, ReportCell], month: int, cell: Repo
     )
 
 
+def _sales_trailing_etc_key(*, welfare: bool, final: bool) -> str:
+    if welfare or final:
+        return WELFARE_ETC_GROUP_ID
+    return "z"
+
+
+def _split_item_order(item_order: list[str], etc_key: str) -> tuple[list[str], str | None]:
+    if etc_key not in item_order:
+        return item_order, None
+    main_order = [code for code in item_order if code != etc_key]
+    return main_order, etc_key
+
+
+def _merge_month_metrics(target: MonthMetrics, source: MonthMetrics) -> None:
+    target.count += source.count
+    target.quantity += source.quantity
+    target.amount_won += source.amount_won
+
+
+def _accumulate_trailing_item_for_customer(
+    *,
+    cust_code: str,
+    trailing_key: str,
+    bucket: dict[tuple[str, str, int], MonthMetrics],
+    months: list[int],
+    sub_month_cells: dict[int, ReportCell],
+    global_etc_month_cells: dict[int, ReportCell],
+) -> list[ReportCell]:
+    period_cells: list[ReportCell] = []
+    for month in months:
+        metrics = bucket.get((cust_code, trailing_key, month), MonthMetrics())
+        cell = _metrics_to_cell(metrics)
+        period_cells.append(cell)
+        _accumulate_month_cell(sub_month_cells, month, cell)
+        _accumulate_month_cell(global_etc_month_cells, month, cell)
+    return period_cells
+
+
+def _accumulate_unclassified_items_for_customer(
+    *,
+    cust_code: str,
+    trailing_key: str,
+    bucket: dict[tuple[str, str, int], MonthMetrics],
+    months: list[int],
+    item_categories: dict[str, str],
+    sub_month_cells: dict[int, ReportCell],
+    global_etc_month_cells: dict[int, ReportCell],
+) -> list[ReportCell]:
+    period_cells: list[ReportCell] = []
+    for month in months:
+        combined = MonthMetrics()
+        for (cust, item, bucket_month), metrics in bucket.items():
+            if cust != cust_code or bucket_month != month:
+                continue
+            if item in item_categories or item == trailing_key:
+                continue
+            _merge_month_metrics(combined, metrics)
+        cell = _metrics_to_cell(combined)
+        period_cells.append(cell)
+        _accumulate_month_cell(sub_month_cells, month, cell)
+        _accumulate_month_cell(global_etc_month_cells, month, cell)
+    return period_cells
+
+
+def _append_global_etc_section(
+    *,
+    report_rows: list[ReportRow],
+    global_etc_month_cells: dict[int, ReportCell],
+    period_blocks: list[PeriodBlock],
+    trailing_etc_key: str,
+) -> None:
+    etc_total = _sum_cells(list(global_etc_month_cells.values()))
+    if not (etc_total.count or etc_total.quantity or etc_total.amount_thousand):
+        return
+
+    etc_label = "기타"
+    report_rows.append(
+        ReportRow(
+            customer_label=etc_label,
+            item_label="소계",
+            row_type="subtotal",
+            total=etc_total,
+            months=global_etc_month_cells,
+            blocks=_blocks_from_months(global_etc_month_cells, period_blocks),
+            customer_code=SALES_ETC_SUMMARY_CODE,
+        )
+    )
+    report_rows.append(
+        ReportRow(
+            customer_label=etc_label,
+            item_label=etc_label,
+            row_type="item",
+            total=etc_total,
+            months=global_etc_month_cells,
+            blocks=_blocks_from_months(global_etc_month_cells, period_blocks),
+            customer_code=SALES_ETC_SUMMARY_CODE,
+            item_code=trailing_etc_key,
+        )
+    )
+
+
 def build_sales_report(
     qs: QuerySet[SalesRecord],
     year: int,
@@ -312,7 +417,10 @@ def build_sales_report(
 
     item_categories = get_item_category_map()
     customer_categories = get_customer_category_map()
-    item_order = get_welfare_group_order() if (welfare or final) else get_item_category_order()
+    use_welfare_axis = welfare or final
+    item_order = get_welfare_group_order() if use_welfare_axis else get_item_category_order()
+    trailing_etc_key = _sales_trailing_etc_key(welfare=welfare, final=final)
+    main_item_order, trailing_item_key = _split_item_order(item_order, trailing_etc_key)
 
     unclassified_count = filtered.filter(
         Q(is_unclassified_item=True) | Q(is_unclassified_customer=True)
@@ -321,6 +429,7 @@ def build_sales_report(
     report_rows: list[ReportRow] = []
     grand_month_cells: dict[int, ReportCell] = {m: _empty_cell() for m in months}
     all_item_cells_for_total: list[ReportCell] = []
+    global_etc_month_cells: dict[int, ReportCell] = {m: _empty_cell() for m in months}
 
     for cust_code in _customer_order(simple=use_simple_customers, final=final):
         cust_name = _customer_label(
@@ -332,8 +441,8 @@ def build_sales_report(
         sub_month_cells: dict[int, ReportCell] = {m: _empty_cell() for m in months}
         section_rows: list[ReportRow] = []
 
-        for item_code in item_order:
-            if welfare or final:
+        for item_code in main_item_order:
+            if use_welfare_axis:
                 item_name = get_welfare_group_labels()[item_code]
             else:
                 item_name = item_categories[item_code]
@@ -363,6 +472,31 @@ def build_sales_report(
                 )
             )
 
+        if trailing_item_key:
+            etc_period_cells = _accumulate_trailing_item_for_customer(
+                cust_code=cust_code,
+                trailing_key=trailing_item_key,
+                bucket=bucket,
+                months=months,
+                sub_month_cells=sub_month_cells,
+                global_etc_month_cells=global_etc_month_cells,
+            )
+            for m, cell in zip(months, etc_period_cells):
+                _accumulate_month_cell(grand_month_cells, m, cell)
+
+        if not use_welfare_axis:
+            unclassified_period_cells = _accumulate_unclassified_items_for_customer(
+                cust_code=cust_code,
+                trailing_key=trailing_item_key or "z",
+                bucket=bucket,
+                months=months,
+                item_categories=item_categories,
+                sub_month_cells=sub_month_cells,
+                global_etc_month_cells=global_etc_month_cells,
+            )
+            for m, cell in zip(months, unclassified_period_cells):
+                _accumulate_month_cell(grand_month_cells, m, cell)
+
         subtotal_row = ReportRow(
             customer_label=cust_name,
             item_label="소계",
@@ -381,6 +515,22 @@ def build_sales_report(
         )
         if unclassified_rows:
             report_rows.extend(unclassified_rows)
+            for row in unclassified_rows:
+                if row.row_type != "item":
+                    continue
+                all_item_cells_for_total.append(row.total)
+                for month, cell in row.months.items():
+                    _accumulate_month_cell(grand_month_cells, month, cell)
+
+    global_etc_total = _sum_cells(list(global_etc_month_cells.values()))
+    if global_etc_total.count or global_etc_total.quantity or global_etc_total.amount_thousand:
+        all_item_cells_for_total.append(global_etc_total)
+        _append_global_etc_section(
+            report_rows=report_rows,
+            global_etc_month_cells=global_etc_month_cells,
+            period_blocks=period_blocks,
+            trailing_etc_key=trailing_item_key or trailing_etc_key,
+        )
 
     grand_total = _sum_cells(all_item_cells_for_total)
     total_row = ReportRow(
@@ -425,7 +575,7 @@ def _build_unclassified_section(
     unclassified_keys = [
         k
         for k in bucket
-        if k[0] not in customer_categories or k[1] not in item_categories
+        if k[0] not in customer_categories
     ]
     if not unclassified_keys:
         return []

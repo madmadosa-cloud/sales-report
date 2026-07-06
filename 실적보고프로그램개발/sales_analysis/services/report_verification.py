@@ -9,11 +9,16 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from django.db.models import Count, Q, QuerySet, Sum
 
-from sales_analysis.constants import FINAL_CUSTOMER_ORDER, SIMPLE_CUSTOMER_ORDER
+from sales_analysis.constants import (
+    FINAL_CUSTOMER_ORDER,
+    SIMPLE_CUSTOMER_ORDER,
+    WELFARE_ETC_GROUP_ID,
+)
 from sales_analysis.models import SalesRecord
 from sales_analysis.services.welfare_service import welfare_group_for_item
 from sales_analysis.services.aggregation import (
     ReportCell,
+    SALES_ETC_SUMMARY_CODE,
     SalesReport,
     aggregate_from_queryset,
     effective_customer_code,
@@ -23,7 +28,9 @@ from sales_analysis.services.aggregation import (
     remap_bucket_for_welfare,
 )
 from sales_analysis.services.master_service import (
+    get_customer_category_map,
     get_customer_category_order,
+    get_item_category_map,
     get_item_category_order,
 )
 
@@ -48,6 +55,80 @@ class ReportVerificationResult:
     report_grand_count: int = 0
     report_grand_amount_thousand: int = 0
     missing_months: list[int] = field(default_factory=list)
+
+
+def _report_trailing_etc_key(report: SalesReport) -> str:
+    if report.is_welfare or report.is_final:
+        return WELFARE_ETC_GROUP_ID
+    return "z"
+
+
+def _report_customer_codes(report: SalesReport) -> list[str]:
+    if report.is_final:
+        return FINAL_CUSTOMER_ORDER
+    if report.is_simple or report.is_welfare:
+        return SIMPLE_CUSTOMER_ORDER
+    return get_customer_category_order()
+
+
+def _etc_bucket_slice(
+    manual: dict[tuple[str, str, int], dict],
+    *,
+    cust_code: str,
+    month: int,
+    trailing_etc: str,
+    include_unclassified_items: bool,
+    item_categories: dict[str, str],
+) -> dict:
+    result = {
+        "row_count": 0,
+        "amount_won": Decimal(0),
+        "quantity_sum": Decimal(0),
+    }
+    base = manual.get((cust_code, trailing_etc, month))
+    if base:
+        result["row_count"] += base["row_count"]
+        result["amount_won"] += base["amount_won"]
+        result["quantity_sum"] += base["quantity_sum"]
+    if include_unclassified_items:
+        for (cust, item, bucket_month), data in manual.items():
+            if cust != cust_code or bucket_month != month:
+                continue
+            if item in item_categories or item == trailing_etc:
+                continue
+            result["row_count"] += data["row_count"]
+            result["amount_won"] += data["amount_won"]
+            result["quantity_sum"] += data["quantity_sum"]
+    return result
+
+
+def _expected_global_etc_for_month(
+    manual: dict[tuple[str, str, int], dict],
+    *,
+    month: int,
+    customer_codes: list[str],
+    trailing_etc: str,
+    include_unclassified_items: bool,
+    item_categories: dict[str, str],
+) -> dict:
+    result = {
+        "row_count": 0,
+        "amount_won": Decimal(0),
+        "quantity_sum": Decimal(0),
+    }
+    for cust_code in customer_codes:
+        slice_data = _etc_bucket_slice(
+            manual,
+            cust_code=cust_code,
+            month=month,
+            trailing_etc=trailing_etc,
+            include_unclassified_items=include_unclassified_items,
+            item_categories=item_categories,
+        )
+        result["row_count"] += slice_data["row_count"]
+        result["amount_won"] += slice_data["amount_won"]
+        result["quantity_sum"] += slice_data["quantity_sum"]
+    return result
 
 
 def _manual_group_counts(qs: QuerySet[SalesRecord]) -> dict[tuple[str, str, int], dict]:
@@ -246,12 +327,26 @@ def verify_report(
 
     # 4) 보고서 품목 행 건수 = DB 그룹별 행 수
     report_item_ok = True
+    trailing_etc = _report_trailing_etc_key(report)
+    customer_codes_scope = _report_customer_codes(report)
+    item_categories = get_item_category_map()
+    include_unclassified_items = not (report.is_welfare or report.is_final or report.is_simple)
     for row in report.rows:
         if row.row_type != "item":
             continue
         for month in report.months:
-            key = (row.customer_code, row.item_code, month)
-            expected = manual.get(key, {"row_count": 0})["row_count"]
+            if row.customer_code == SALES_ETC_SUMMARY_CODE:
+                expected = _expected_global_etc_for_month(
+                    manual,
+                    month=month,
+                    customer_codes=customer_codes_scope,
+                    trailing_etc=trailing_etc,
+                    include_unclassified_items=include_unclassified_items,
+                    item_categories=item_categories,
+                )["row_count"]
+            else:
+                key = (row.customer_code, row.item_code, month)
+                expected = manual.get(key, {"row_count": 0})["row_count"]
             cell = row.months.get(month)
             actual = cell.count if cell else 0
             if expected != actual:
@@ -297,18 +392,39 @@ def verify_report(
                 sub_cell = row.months.get(month)
                 sub_count = sub_cell.count if sub_cell else 0
                 sub_quantity = sub_cell.quantity if sub_cell else Decimal(0)
-                if sub_sum != sub_count:
+                if row.customer_code == SALES_ETC_SUMMARY_CODE:
+                    etc_expected = sub_count
+                else:
+                    etc_bonus = _etc_bucket_slice(
+                        manual,
+                        cust_code=row.customer_code,
+                        month=month,
+                        trailing_etc=trailing_etc,
+                        include_unclassified_items=include_unclassified_items,
+                        item_categories=item_categories,
+                    )
+                    etc_expected = sub_sum + etc_bonus["row_count"]
+                if etc_expected != sub_count:
                     subtotal_ok = False
                     errors.append(
                         f"소계 불일치 {row.customer_label} {month}월: "
                         f"품목합={sub_sum} 소계={sub_count}"
                     )
-                if sub_qty != sub_quantity:
-                    subtotal_ok = False
-                    errors.append(
-                        f"소계 수량 불일치 {row.customer_label} {month}월: "
-                        f"품목합={sub_qty} 소계={sub_quantity}"
-                    )
+                if row.customer_code != SALES_ETC_SUMMARY_CODE:
+                    etc_qty_bonus = _etc_bucket_slice(
+                        manual,
+                        cust_code=row.customer_code,
+                        month=month,
+                        trailing_etc=trailing_etc,
+                        include_unclassified_items=include_unclassified_items,
+                        item_categories=item_categories,
+                    )["quantity_sum"]
+                    if sub_qty + etc_qty_bonus != sub_quantity:
+                        subtotal_ok = False
+                        errors.append(
+                            f"소계 수량 불일치 {row.customer_label} {month}월: "
+                            f"품목합={sub_qty} 소계={sub_quantity}"
+                        )
         i += 1
 
     checks.append(
@@ -333,7 +449,8 @@ def verify_report(
     item_rows_std = [
         r
         for r in report.rows
-        if r.row_type == "item" and r.customer_code in customer_codes
+        if r.row_type == "item"
+        and (r.customer_code in customer_codes or r.customer_code == SALES_ETC_SUMMARY_CODE)
     ]
     grand_from_items = sum(r.total.count for r in item_rows_std)
     grand_count_ok = result.report_grand_count == grand_from_items

@@ -57,7 +57,7 @@ class WelfareReportTest(TestCase):
         qs = SalesRecord.objects.filter(year=2025, month=1)
         report = build_sales_report(qs, 2025, 1, 1, welfare=True)
         item_rows = [r for r in report.rows if r.row_type == "item" and r.customer_code == "a"]
-        self.assertEqual(len(item_rows), 13)
+        self.assertEqual(len(item_rows), 12)
 
     def test_remap_bucket_for_welfare(self):
         from sales_analysis.services.aggregation import MonthMetrics, aggregate_from_queryset

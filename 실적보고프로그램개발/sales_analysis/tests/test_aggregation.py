@@ -130,7 +130,7 @@ class AggregationTest(TestCase):
 
         item_rows = [r for r in report.rows if r.row_type == "item" and r.customer_code == "b"]
 
-        self.assertEqual(len(item_rows), len(get_item_category_order()))
+        self.assertEqual(len(item_rows), len(get_item_category_order()) - 1)
 
 
 

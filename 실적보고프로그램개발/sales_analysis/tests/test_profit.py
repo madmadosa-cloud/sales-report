@@ -21,7 +21,10 @@ from sales_analysis.models import ProfitRecord
 
 from sales_analysis.services.classification import parse_profit_csv
 
-from sales_analysis.services.profit_aggregation import build_profit_report
+from sales_analysis.services.profit_aggregation import (
+    PROFIT_ETC_SUMMARY_CODE,
+    build_profit_report,
+)
 
 from sales_analysis.services.profit_import_service import process_profit_upload
 
@@ -359,6 +362,68 @@ class ProfitReportTest(TestCase):
         self.assertFalse(any(r.customer_code == "b" for r in report.rows))
         self.assertFalse(any(r.customer_code == "e" for r in report.rows))
 
+        final_item_rows = [r for r in report.rows if r.row_type == "item"]
+        self.assertTrue(final_item_rows)
+        self.assertNotIn("a", {r.item_code for r in final_item_rows})
+        self.assertIn("office", {r.item_code for r in final_item_rows})
+        self.assertEqual(report.axis_label, "출력항목")
+
+    def test_profit_etc_aggregated_at_bottom(self):
+        ProfitRecord.objects.create(
+            item_code="a001-2024-1",
+            item_name=SEED_ITEM_CATEGORIES["a"],
+            customer_code="A10-00036",
+            customer_category_code="a",
+            item_category_code="a",
+            quantity=Decimal("10"),
+            cost=Decimal("90000"),
+            amount=Decimal("10000"),
+            period_label="2026/01/01~06/30",
+        )
+        ProfitRecord.objects.create(
+            item_code="z001-2024-1",
+            item_name=SEED_ITEM_CATEGORIES["z"],
+            customer_code="B15-00006",
+            customer_category_code="b",
+            item_category_code="z",
+            quantity=Decimal("3"),
+            cost=Decimal("27000"),
+            amount=Decimal("3000"),
+            period_label="2026/01/01~06/30",
+        )
+        ProfitRecord.objects.create(
+            item_code="z002-2024-1",
+            item_name=SEED_ITEM_CATEGORIES["z"],
+            customer_code="E10-00001",
+            customer_category_code="e",
+            item_category_code="z",
+            quantity=Decimal("2"),
+            cost=Decimal("18000"),
+            amount=Decimal("2000"),
+            period_label="2026/01/01~06/30",
+        )
+
+        for report in (
+            build_profit_report(welfare=False),
+            build_profit_report(welfare=True),
+            build_profit_report(final=True),
+        ):
+            etc_rows = [r for r in report.rows if r.customer_code == PROFIT_ETC_SUMMARY_CODE]
+            self.assertEqual(len(etc_rows), 2, report.period_label)
+            self.assertEqual(etc_rows[0].row_type, "subtotal")
+            self.assertEqual(etc_rows[1].row_type, "item")
+            self.assertEqual(etc_rows[1].quantity, Decimal("5"))
+            self.assertEqual(etc_rows[1].amount, Decimal("5000"))
+            self.assertEqual(report.rows[-1].customer_code, PROFIT_ETC_SUMMARY_CODE)
+            self.assertFalse(
+                any(
+                    r.row_type == "item"
+                    and r.item_code in ("z", "etc")
+                    and r.customer_code != PROFIT_ETC_SUMMARY_CODE
+                    for r in report.rows
+                )
+            )
+
     def test_build_profit_welfare_report(self):
 
         self._seed_records()
@@ -385,7 +450,7 @@ class ProfitReportTest(TestCase):
 
         self.assertEqual(facility.amount, Decimal("10000"))
 
-        welfare_items_per_customer = len(get_welfare_group_order())
+        welfare_items_per_customer = len(get_welfare_group_order()) - 1
 
         b_items = [
 
@@ -398,8 +463,6 @@ class ProfitReportTest(TestCase):
         ]
 
         self.assertEqual(len(b_items), welfare_items_per_customer)
-
-
 
     def test_profit_upload_replace_flow(self):
 
